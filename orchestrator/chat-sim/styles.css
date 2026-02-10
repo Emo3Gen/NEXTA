@@ -324,6 +324,54 @@ textarea, input {
   max-height: 40vh;
 }
 
+/* === Layout priorities: messages >= 40% viewport, actions as tabs (v0.1.3) === */
+
+/* Give the messages area guaranteed space */
+#messages, .messages, .chat-messages {
+  min-height: 40vh;          /* key requirement */
+  flex: 1 1 auto;
+}
+
+/* Make composer compact */
+#composer, .composer, .chat-input {
+  flex: 0 0 auto;
+}
+
+/* If there is a scenario selector block - keep it near header */
+.header, #header, .topbar, .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: inherit;
+}
+
+/* Quick actions as horizontal tabs/chips */
+.quick-actions, #quick-actions, .actions, .qa-row, .buttons-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 10px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.quick-actions button, #quick-actions button, .actions button, .qa-row button, .buttons-row button,
+button.qa {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 70vw; /* avoid huge pills */
+}
+
+/* Reduce input height so it doesn't compete with messages */
+#composer textarea, .composer textarea, .chat-input textarea {
+  min-height: 44px;
+  max-height: 20vh;
+}
+
+
 
 /* ===== Mobile адаптация ===== */
 @media (max-width: 768px) {
