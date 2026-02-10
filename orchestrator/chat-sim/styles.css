@@ -404,13 +404,14 @@ img, svg, canvas {
 
 .composer-row input,
 .composer-row textarea {
-  flex: 1 1 auto;
-  width: 100%;
+  flex: 0 0 90%;
+  max-width: 90%;
 }
 
 .send-icon {
-  flex: 0 0 auto;
-  width: 44px;
+  flex: 0 0 10%;
+  max-width: 10%;
+  min-width: 44px; /* сохраняем удобную зону нажатия */
   height: 44px;
   border-radius: 12px;
   display: grid;
