@@ -110,12 +110,21 @@ function classify(text) {
   const phone = extractPhone(text);
   const age = extractAge(text);
 
-  const hasYoga = /\bйог|хатха|hatha|силов\w*\s*йог\w*\b/.test(t); // includes “силовая йога”
-  const hasRent = /\bаренд|зал|помещен|площадк|час\b/.test(t);
-  const hasDance = /\bтанц|хореог|брейк|k-?pop|kpop|хай\s*хилс|high\s*heels|латин|бальн|контемп|lady\s*style|джаз\b/.test(t);
+  // IMPORTANT: avoid \b with Cyrillic; use simple matches / unicode-friendly regexes
+  const hasYoga =
+    /йог|хатха|hatha|силов\w*\s*йог/i.test(t); // includes “силовая йога”
 
-  const wantsBook = /\bзапис|запись|хочу\s+на\s+пробн|пробн\w*\b/.test(t);
-  const asksWhatYouHave = /\bчто\s+есть|какие\s+направлен|что\s+у\s+вас\s+есть|из\s+танцев\b/.test(t);
+  const hasRent =
+    /аренд|зал|помещен|площадк|почас|час/i.test(t);
+
+  const hasDance =
+    /танц|хореог|брейк|k-?pop|kpop|хай\s*хилс|high\s*heels|латин|бальн|контемп|lady\s*style|джаз/i.test(t);
+
+  const wantsBook =
+    /запис|запись|пробн|хочу\s+на/i.test(t);
+
+  const asksWhatYouHave =
+    /что\s+есть|какие\s+направлен|что\s+у\s+вас\s+есть|из\s+танцев/i.test(t);
 
   // intent priority (simple & predictable)
   if (hasRent) return { intent: 'RENT', phone, age };
