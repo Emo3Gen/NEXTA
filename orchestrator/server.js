@@ -1,14 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
-import path from "path";
 
-const chatSimDir = path.resolve(process.cwd(), "../chat-sim");
+const chatSimDir = path.resolve(process.cwd(), '../chat-sim');
 app.use(express.static(chatSimDir));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(chatSimDir, "index.html"));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(chatSimDir, 'index.html'));
 });
 
 const PORT = process.env.PORT || 8001;

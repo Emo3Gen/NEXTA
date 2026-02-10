@@ -1,7 +1,6 @@
 {
   "name": "orchestrator",
   "version": "0.1.0",
-  "type": "module",
   "description": "Orchestrator service for Танцуй со мной",
   "main": "server.js",
   "scripts": {
