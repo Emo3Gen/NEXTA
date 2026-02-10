@@ -5,34 +5,35 @@ const path = require('path');
 
 const app = express();
 
+// --- UI discovery: find chat-sim/index.html in typical locations (Render + local)
 const candidates = [
   path.resolve(process.cwd(), 'chat-sim'),
   path.resolve(process.cwd(), '../chat-sim'),
-  path.resolve(__dirname, 'chat-sim'),
   path.resolve(__dirname, '../chat-sim'),
   path.resolve(__dirname, '../../chat-sim'),
 ];
 
-const pickChatSimDir = () => {
+function pickChatSimDir() {
   for (const dir of candidates) {
     const indexPath = path.join(dir, 'index.html');
     if (fs.existsSync(indexPath)) return dir;
   }
   return null;
-};
+}
 
 const chatSimDir = pickChatSimDir();
 
+// Debug endpoint to confirm which path is used in Render
 app.get('/api/_paths', (req, res) => {
   res.json({
     __dirname,
     cwd: process.cwd(),
+    candidates,
     chatSimDir,
     chatSimIndex: chatSimDir ? path.join(chatSimDir, 'index.html') : null,
     exists_chatSimDir: chatSimDir ? fs.existsSync(chatSimDir) : false,
     exists_index: chatSimDir ? fs.existsSync(path.join(chatSimDir, 'index.html')) : false,
-    ls_chatSimDir:
-      chatSimDir && fs.existsSync(chatSimDir) ? fs.readdirSync(chatSimDir).slice(0, 50) : null,
+    ls_chatSimDir: chatSimDir ? fs.readdirSync(chatSimDir).slice(0, 50) : null,
   });
 });
 
@@ -41,7 +42,12 @@ if (chatSimDir) {
 }
 
 app.get('/', (req, res) => {
-  res.status(200).send('NEXA orchestrator v0.1.3 — DEPLOY CHECK');
+  if (!chatSimDir) {
+    return res
+      .status(500)
+      .send('UI not found: chat-sim/index.html is missing in the deployed filesystem');
+  }
+  return res.sendFile(path.join(chatSimDir, 'index.html'));
 });
 
 const PORT = process.env.PORT || 8001;
