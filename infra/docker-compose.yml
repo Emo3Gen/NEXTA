@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: tsm-postgres
+    environment:
+      POSTGRES_DB: tsm
+      POSTGRES_USER: tsm
+      POSTGRES_PASSWORD: tsm
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tsm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tsm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: tsm-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - tsm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  orchestrator:
+    build:
+      context: ../services/orchestrator
+      dockerfile: Dockerfile
+    container_name: tsm-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+psycopg://tsm:tsm@postgres:5432/tsm
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4}
+      PRODUCT_VERSION: v0.2.0
+    volumes:
+      - ../data:/app/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tsm-network
+
+  chat-sim:
+    build:
+      context: ../services/chat-sim
+      dockerfile: Dockerfile
+    container_name: tsm-chat-sim
+    ports:
+      - "8000:8000"
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8001
+      PRODUCT_VERSION: v0.2.0
+    depends_on:
+      - orchestrator
+    networks:
+      - tsm-network
+
+volumes:
+  postgres_data:
+
+networks:
+  tsm-network:
+    driver: bridge
+
+version: '3.8'
+
+services:
+  chat-sim:
+    build:
+      context: ../chat-sim
+      dockerfile: Dockerfile
+    container_name: tanets-so-mnoy-chat-sim
+    ports:
+      - "8000:8000"
+    depends_on:
+      - orchestrator
+    networks:
+      - tanets-network
+
+  orchestrator:
+    build:
+      context: ../orchestrator
+      dockerfile: Dockerfile
+    container_name: tanets-so-mnoy-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+    networks:
+      - tanets-network
+
+networks:
+  tanets-network:
+    driver: bridge

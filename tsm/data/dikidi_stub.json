@@ -1,0 +1,187 @@
+{
+  "directions": [
+    {
+      "id": "latina_solo_18",
+      "name": "Латина соло 18+",
+      "age_min": 18,
+      "age_max": null,
+      "price_per_month": 3500,
+      "trial_price": 500,
+      "group_limit": 15
+    },
+    {
+      "id": "high_heels_18",
+      "name": "Хай Хилс 18+",
+      "age_min": 18,
+      "age_max": null,
+      "price_per_month": 4000,
+      "trial_price": 600,
+      "group_limit": 12
+    },
+    {
+      "id": "choreo_12_17",
+      "name": "Choreo 12-17",
+      "age_min": 12,
+      "age_max": 17,
+      "price_per_month": 3000,
+      "trial_price": 400,
+      "group_limit": 14
+    },
+    {
+      "id": "dance_mix_7_11",
+      "name": "Dance Mix 7-11",
+      "age_min": 7,
+      "age_max": 11,
+      "price_per_month": 2800,
+      "trial_price": 350,
+      "group_limit": 12
+    },
+    {
+      "id": "azbuka_3_5",
+      "name": "Азбука танца 3-5",
+      "age_min": 3,
+      "age_max": 5,
+      "price_per_month": 2500,
+      "trial_price": 300,
+      "group_limit": 10
+    },
+    {
+      "id": "hatha_yoga",
+      "name": "Хатха-йога",
+      "age_min": 16,
+      "age_max": null,
+      "price_per_month": 3200,
+      "trial_price": 450,
+      "group_limit": 20
+    }
+  ],
+  "schedule": [
+    {
+      "direction_id": "latina_solo_18",
+      "day": "Понедельник",
+      "time": "19:00",
+      "duration_minutes": 90,
+      "instructor": "Анна"
+    },
+    {
+      "direction_id": "latina_solo_18",
+      "day": "Среда",
+      "time": "19:00",
+      "duration_minutes": 90,
+      "instructor": "Анна"
+    },
+    {
+      "direction_id": "latina_solo_18",
+      "day": "Пятница",
+      "time": "19:00",
+      "duration_minutes": 90,
+      "instructor": "Анна"
+    },
+    {
+      "direction_id": "high_heels_18",
+      "day": "Вторник",
+      "time": "20:00",
+      "duration_minutes": 60,
+      "instructor": "Мария"
+    },
+    {
+      "direction_id": "high_heels_18",
+      "day": "Четверг",
+      "time": "20:00",
+      "duration_minutes": 60,
+      "instructor": "Мария"
+    },
+    {
+      "direction_id": "choreo_12_17",
+      "day": "Вторник",
+      "time": "17:00",
+      "duration_minutes": 60,
+      "instructor": "Елена"
+    },
+    {
+      "direction_id": "choreo_12_17",
+      "day": "Четверг",
+      "time": "17:00",
+      "duration_minutes": 60,
+      "instructor": "Елена"
+    },
+    {
+      "direction_id": "dance_mix_7_11",
+      "day": "Среда",
+      "time": "16:00",
+      "duration_minutes": 45,
+      "instructor": "Ольга"
+    },
+    {
+      "direction_id": "dance_mix_7_11",
+      "day": "Пятница",
+      "time": "16:00",
+      "duration_minutes": 45,
+      "instructor": "Ольга"
+    },
+    {
+      "direction_id": "azbuka_3_5",
+      "day": "Суббота",
+      "time": "11:00",
+      "duration_minutes": 30,
+      "instructor": "Ирина"
+    },
+    {
+      "direction_id": "azbuka_3_5",
+      "day": "Воскресенье",
+      "time": "11:00",
+      "duration_minutes": 30,
+      "instructor": "Ирина"
+    },
+    {
+      "direction_id": "hatha_yoga",
+      "day": "Понедельник",
+      "time": "18:00",
+      "duration_minutes": 60,
+      "instructor": "Светлана"
+    },
+    {
+      "direction_id": "hatha_yoga",
+      "day": "Среда",
+      "time": "18:00",
+      "duration_minutes": 60,
+      "instructor": "Светлана"
+    }
+  ],
+  "rental": {
+    "rules": {
+      "prepayment_percent": 50,
+      "min_booking_hours": 12,
+      "time_cutoff": "16:00",
+      "people_cutoff": 10
+    },
+    "prices": {
+      "before_16_00": {
+        "up_to_10_people": {
+          "training": 2000,
+          "rehearsal": 2500,
+          "photo_session": 3000
+        },
+        "more_than_10_people": {
+          "training": 2500,
+          "rehearsal": 3000,
+          "photo_session": 3500
+        }
+      },
+      "after_16_00": {
+        "up_to_10_people": {
+          "training": 3000,
+          "rehearsal": 3500,
+          "photo_session": 4000
+        },
+        "more_than_10_people": {
+          "training": 3500,
+          "rehearsal": 4000,
+          "photo_session": 4500
+        }
+      }
+    },
+    "formats": ["training", "rehearsal", "photo_session"],
+    "zones": ["main_hall", "small_hall", "both"]
+  }
+}

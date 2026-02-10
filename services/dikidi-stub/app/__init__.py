@@ -1,0 +1,2 @@
+# DIKIDI stub service
+

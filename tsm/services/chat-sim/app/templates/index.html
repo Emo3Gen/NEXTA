@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Танцуй со мной - Эмулятор v0.1.1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+
+        .main-content {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        header {
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        header h1 {
+            color: #333;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .version {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .scenario-selector {
+            margin-bottom: 24px;
+        }
+
+        .scenario-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .scenario-selector select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .scenario-selector select:hover {
+            border-color: #667eea;
+        }
+
+        .scenario-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .quick-actions {
+            margin-bottom: 24px;
+        }
+
+        .quick-actions h3 {
+            margin-bottom: 12px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .action-btn {
+            padding: 12px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            max-width: 80%;
+            animation: fadeIn 0.3s;
+            white-space: pre-line;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.bot {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            color: #856404;
+            margin: 0 auto;
+            text-align: center;
+            max-width: 100%;
+        }
+
+        .chat-input-container {
+            display: flex;
+            padding: 16px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+            gap: 12px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #sendBtn {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        #sendBtn:hover {
+            background: #5568d3;
+        }
+
+        .test-panel {
+            width: 350px;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .test-panel h3 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 12px;
+        }
+
+        .test-item {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .test-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .test-item .value {
+            display: block;
+            font-size: 14px;
+            color: #333;
+            word-break: break-word;
+            line-height: 1.5;
+        }
+
+        .test-item .value.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <header>
+                <h1>Танцуй со мной</h1>
+                <p class="version">Эмулятор v0.1.1</p>
+            </header>
+
+            <div class="scenario-selector">
+                <label for="scenario">Выберите сценарий:</label>
+                <select id="scenario" name="scenario">
+                    <option value="">-- Выберите сценарий --</option>
+                    <option value="Запись на занятие">Запись на занятие</option>
+                    <option value="Детские группы">Детские группы</option>
+                    <option value="Аренда зала">Аренда зала</option>
+                    <option value="Вопрос о тренере">Вопрос о тренере</option>
+                </select>
+            </div>
+
+            <div class="quick-actions">
+                <h3>Быстрые действия:</h3>
+                <div class="buttons-grid">
+                    <button class="action-btn" data-action="Записаться на пробное занятие">
+                        Записаться на пробное занятие
+                    </button>
+                    <button class="action-btn" data-action="Посмотреть расписание">
+                        Посмотреть расписание
+                    </button>
+                    <button class="action-btn" data-action="Уточнить возраст ребёнка">
+                        Уточнить возраст ребёнка
+                    </button>
+                    <button class="action-btn" data-action="Рассчитать стоимость аренды">
+                        Рассчитать стоимость аренды
+                    </button>
+                    <button class="action-btn" data-action="Передать администратору">
+                        Передать администратору
+                    </button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message system">
+                        <p>Добро пожаловать! Выберите сценарий и начните тестирование.</p>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" id="messageInput" placeholder="Введите сообщение..." />
+                    <button id="sendBtn">Отправить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-panel">
+            <h3>Панель теста</h3>
+            <div class="test-item">
+                <label>Версия продукта</label>
+                <span class="value" id="testVersion">v0.1.1</span>
+            </div>
+            <div class="test-item">
+                <label>Что сейчас тестируем</label>
+                <span class="value empty" id="testScenario">—</span>
+            </div>
+            <div class="test-item">
+                <label>Какое действие сделал пользователь</label>
+                <span class="value empty" id="testAction">—</span>
+            </div>
+            <div class="test-item">
+                <label>К чему это привело</label>
+                <span class="value empty" id="testResult">—</span>
+            </div>
+            <div class="test-item">
+                <label>Источник правды</label>
+                <span class="value">DIKIDI (эмулятор)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ORCHESTRATOR_URL = '/api/send';
+        let currentScenario = '';
+        let lastAction = '';
+        let lastIntent = '';
+        let lastReply = '';
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            const scenarioSelect = document.getElementById('scenario');
+            const actionButtons = document.querySelectorAll('.action-btn');
+            const sendBtn = document.getElementById('sendBtn');
+            const messageInput = document.getElementById('messageInput');
+
+            // Обработчик выбора сценария
+            scenarioSelect.addEventListener('change', (e) => {
+                currentScenario = e.target.value;
+                updateTestPanel();
+                
+                if (currentScenario) {
+                    addSystemMessage(`Выбран сценарий: ${currentScenario}`);
+                }
+            });
+
+            // Обработчики кнопок быстрых действий
+            actionButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const action = btn.dataset.action;
+                    sendAction(action);
+                });
+            });
+
+            // Обработчик отправки текстового сообщения
+            sendBtn.addEventListener('click', () => {
+                const text = messageInput.value.trim();
+                if (text) {
+                    sendMessage(text);
+                    messageInput.value = '';
+                }
+            });
+
+            // Отправка по Enter
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendBtn.click();
+                }
+            });
+        });
+
+        async function sendAction(action) {
+            if (!currentScenario) {
+                addSystemMessage('Пожалуйста, сначала выберите сценарий');
+                return;
+            }
+
+            lastAction = `Кнопка: ${action}`;
+            updateTestPanel();
+
+            addUserMessage(action);
+
+            try {
+                const response = await fetch(ORCHESTRATOR_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: action,
+                        scenario: currentScenario,
+                        action_type: 'button',
+                        action_name: action
+                    })
+                });
+
+                const data = await response.json();
+                handleResponse(data);
+            } catch (error) {
+                console.error('Ошибка при отправке действия:', error);
+                addBotMessage('Ошибка соединения с сервером. Проверьте, запущен ли orchestrator.');
+            }
+        }
+
+        async function sendMessage(text) {
+            if (!currentScenario) {
+                addSystemMessage('Пожалуйста, сначала выберите сценарий');
+                return;
+            }
+
+            lastAction = `Текст: ${text}`;
+            updateTestPanel();
+
+            addUserMessage(text);
+
+            try {
+                const response = await fetch(ORCHESTRATOR_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        scenario: currentScenario,
+                        action_type: 'text',
+                        action_name: null
+                    })
+                });
+
+                const data = await response.json();
+                handleResponse(data);
+            } catch (error) {
+                console.error('Ошибка при отправке сообщения:', error);
+                addBotMessage('Ошибка соединения с сервером. Проверьте, запущен ли orchestrator.');
+            }
+        }
+
+        function handleResponse(data) {
+            if (data.intent) {
+                lastIntent = data.intent;
+            }
+            if (data.reply) {
+                lastReply = data.reply;
+                addBotMessage(data.reply);
+            } else {
+                addBotMessage('Получен ответ без текста');
+            }
+            updateTestPanel();
+        }
+
+        function addUserMessage(text) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            messageDiv.innerHTML = `<p>${escapeHtml(text)}</p>`;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addBotMessage(text) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+            messageDiv.innerHTML = `<p>${escapeHtml(text)}</p>`;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addSystemMessage(text) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.innerHTML = `<p>${escapeHtml(text)}</p>`;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function updateTestPanel() {
+            // Версия продукта
+            document.getElementById('testVersion').textContent = 'v0.1.1';
+            
+            // Что тестируем
+            const testScenarioEl = document.getElementById('testScenario');
+            if (currentScenario) {
+                testScenarioEl.textContent = currentScenario;
+                if (lastAction) {
+                    testScenarioEl.textContent += `\n${lastAction}`;
+                }
+                testScenarioEl.classList.remove('empty');
+            } else {
+                testScenarioEl.textContent = '—';
+                testScenarioEl.classList.add('empty');
+            }
+            
+            // Действие пользователя
+            const testActionEl = document.getElementById('testAction');
+            if (lastAction) {
+                testActionEl.textContent = lastAction;
+                testActionEl.classList.remove('empty');
+            } else {
+                testActionEl.textContent = '—';
+                testActionEl.classList.add('empty');
+            }
+            
+            // К чему привело
+            const testResultEl = document.getElementById('testResult');
+            if (lastIntent && lastReply) {
+                let resultText = `Определено: ${getIntentDescription(lastIntent)}`;
+                if (lastReply) {
+                    resultText += `\n\nБот ответил:\n${lastReply}`;
+                }
+                testResultEl.textContent = resultText;
+                testResultEl.classList.remove('empty');
+            } else {
+                testResultEl.textContent = '—';
+                testResultEl.classList.add('empty');
+            }
+        }
+
+        function getIntentDescription(intent) {
+            const descriptions = {
+                'escalation': 'Передача администратору',
+                'ask_age': 'Уточнение возраста',
+                'children_groups_info': 'Информация о детских группах',
+                'calculate_rental': 'Расчет стоимости аренды',
+                'rental_info': 'Информация об аренде',
+                'book_trial': 'Запись на пробное занятие',
+                'view_schedule': 'Просмотр расписания',
+                'booking_info': 'Информация о записи',
+                'trainer_question': 'Вопрос о тренере',
+                'general_inquiry': 'Общий запрос',
+                'error': 'Ошибка'
+            };
+            return descriptions[intent] || intent;
+        }
+
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

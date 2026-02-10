@@ -1,0 +1,380 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    gap: 20px;
+    height: calc(100vh - 40px);
+}
+
+.main-content {
+    flex: 1;
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+header h1 {
+    color: #333;
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.version {
+    color: #666;
+    font-size: 14px;
+}
+
+.scenario-selector {
+    margin-bottom: 24px;
+}
+
+.scenario-selector label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.scenario-selector select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+.scenario-selector select:hover {
+    border-color: #667eea;
+}
+
+.scenario-selector select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.quick-actions {
+    margin-bottom: 24px;
+}
+
+.quick-actions h3 {
+    margin-bottom: 12px;
+    color: #333;
+    font-size: 18px;
+}
+
+.buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.action-btn {
+    padding: 12px 16px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.action-btn:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.action-btn:active {
+    transform: translateY(0);
+}
+
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f9f9f9;
+}
+
+.message {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    max-width: 80%;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.user {
+    background: #667eea;
+    color: white;
+    margin-left: auto;
+    text-align: right;
+}
+
+.message.bot {
+    background: white;
+    color: #333;
+    border: 1px solid #e0e0e0;
+}
+
+.message.system {
+    background: #fff3cd;
+    color: #856404;
+    margin: 0 auto;
+    text-align: center;
+    max-width: 100%;
+}
+
+.chat-input-container {
+    display: flex;
+    padding: 16px;
+    background: white;
+    border-top: 2px solid #e0e0e0;
+    gap: 12px;
+}
+
+#messageInput {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+#messageInput:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+#sendBtn {
+    padding: 12px 24px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+#sendBtn:hover {
+    background: #5568d3;
+}
+
+.debug-panel {
+    width: 300px;
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-panel h3 {
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 12px;
+}
+
+.debug-item {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f9f9f9;
+    border-radius: 8px;
+}
+
+.debug-item label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.debug-item span {
+    display: block;
+    font-size: 14px;
+    color: #333;
+    word-break: break-word;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ===== Mobile адаптация ===== */
+@media (max-width: 768px) {
+  body {
+    padding: 12px;
+  }
+
+  .container {
+    flex-direction: column;
+    height: auto;         /* убираем жесткую высоту */
+    gap: 12px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+
+  header h1 {
+    font-size: 24px;
+  }
+
+  .buttons-grid {
+    grid-template-columns: 1fr; /* кнопки в столбик */
+  }
+
+  .message {
+    max-width: 92%;
+  }
+
+  .chat-input-container {
+    padding: 12px;
+  }
+
+  #sendBtn {
+    padding: 12px 16px;
+    font-size: 16px;
+  }
+
+  .debug-panel {
+    width: 100%;
+    padding: 16px;
+  }
+}
+
+/* Чуть комфортнее для очень узких экранов */
+@media (max-width: 420px) {
+  body {
+    padding: 10px;
+  }
+
+  .main-content {
+    padding: 14px;
+  }
+
+  #messageInput {
+    font-size: 16px; /* чтобы iOS не зумил */
+  }
+}
+
+/* ===== Mobile override v2: тестовый режим (убираем debug, упрощаем ввод) ===== */
+@media (max-width: 768px) {
+  .debug-panel { display: none; }
+
+  .chat-input-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #sendBtn {
+    width: 100%;
+  }
+}
+
+/* ===== UX fix: чат и ввод всегда на виду (mobile) ===== */
+@media (max-width: 768px) {
+  .main-content {
+    height: calc(100vh - 24px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-container {
+    flex: 1;
+    min-height: 0; /* важно для скролла внутри */
+  }
+
+  .chat-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chat-input-container {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 10;
+  }
+}
+
+/* ===== Mobile fix: быстрые действия не должны съедать экран ===== */
+@media (max-width: 768px) {
+  .quick-actions {
+    margin-bottom: 12px;
+    max-height: 34vh;     /* ограничиваем */
+    overflow: auto;       /* скролл внутри блока */
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 12px;
+    background: #fff;
+  }
+}

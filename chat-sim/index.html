@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Танцуй со мной - Эмулятор v0.1.2</title>
+    <link rel="stylesheet" href="styles.css?v=0.1.2.1">
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <header>
+                <h1>Танцуй со мной</h1>
+                <p class="version">Эмулятор v0.1.2</p>
+                <p class="version" id="uiVersion">UI build: 0.1.2.1 · API: <span id="apiVersion">…</span></p>
+            </header>
+
+            <div class="scenario-selector">
+                <label for="scenario">Выберите сценарий:</label>
+                <select id="scenario" name="scenario">
+                    <option value="">-- Выберите сценарий --</option>
+                    <option value="Запись на занятие">Запись на занятие</option>
+                    <option value="Детские группы">Детские группы</option>
+                    <option value="Аренда зала">Аренда зала</option>
+                    <option value="Вопрос о тренере">Вопрос о тренере</option>
+                </select>
+            </div>
+
+            <div class="quick-actions">
+                <h3>Быстрые действия:</h3>
+                <div class="buttons-grid">
+                    <button class="action-btn" data-action="Записаться на пробное занятие">
+                        Записаться на пробное занятие
+                    </button>
+                    <button class="action-btn" data-action="Посмотреть расписание">
+                        Посмотреть расписание
+                    </button>
+                    <button class="action-btn" data-action="Уточнить возраст">
+                        Уточнить возраст
+                    </button>
+                    <button class="action-btn" data-action="Рассчитать стоимость аренды">
+                        Рассчитать стоимость аренды
+                    </button>
+                    <button class="action-btn" data-action="Передать администратору">
+                        Передать администратору
+                    </button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message system">
+                        <p>Добро пожаловать! Выберите сценарий и начните тестирование.</p>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" id="messageInput" placeholder="Введите сообщение..." />
+                    <button id="sendBtn">Отправить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="debug-panel">
+            <h3>Панель отладки</h3>
+            <div class="debug-item">
+                <label>Текущий сценарий:</label>
+                <span id="debugScenario">—</span>
+            </div>
+            <div class="debug-item">
+                <label>Последний intent:</label>
+                <span id="debugIntent">—</span>
+            </div>
+            <div class="debug-item">
+                <label>Версия продукта:</label>
+                <span id="debugVersion">v0.1.2</span>
+            </div>
+            <div class="debug-item">
+                <label>Последнее действие:</label>
+                <span id="debugAction">—</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=0.1.2.1"></script>
+</body>
+</html>
