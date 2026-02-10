@@ -87,9 +87,11 @@ header h1 {
 }
 
 .buttons-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
     gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .action-btn {
@@ -394,7 +396,7 @@ button.qa {
   }
 
   .buttons-grid {
-    grid-template-columns: 1fr; /* кнопки в столбик */
+    gap: 10px; /* чуть компактнее на маленьких экранах */
   }
 
   .message {
