@@ -17,7 +17,6 @@
             </header>
 
             <div class="scenario-selector">
-                <label for="scenario">Выберите сценарий:</label>
                 <select id="scenario" name="scenario">
                     <option value="">-- Выберите сценарий --</option>
                     <option value="Запись на занятие">Запись на занятие</option>
@@ -28,21 +27,45 @@
             </div>
 
             <div class="quick-actions">
-                <h3>Быстрые действия:</h3>
                 <div class="buttons-grid">
-                    <button class="action-btn" data-action="Записаться на пробное занятие" title="Записаться на пробное занятие">
+                    <button
+                        class="action-btn"
+                        data-action="Записаться на пробное занятие"
+                        data-prompt="Записаться на пробное занятие"
+                        title="Записаться на пробное занятие"
+                    >
                         Пробное
                     </button>
-                    <button class="action-btn" data-action="Посмотреть расписание" title="Посмотреть расписание">
+                    <button
+                        class="action-btn"
+                        data-action="Посмотреть расписание"
+                        data-prompt="Посмотреть расписание"
+                        title="Посмотреть расписание"
+                    >
                         Расписание
                     </button>
-                    <button class="action-btn" data-action="Уточнить возраст" title="Уточнить возраст ребёнка">
+                    <button
+                        class="action-btn"
+                        data-action="Уточнить возраст"
+                        data-prompt="Уточнить возраст ребёнка"
+                        title="Уточнить возраст ребёнка"
+                    >
                         Возраст
                     </button>
-                    <button class="action-btn" data-action="Рассчитать стоимость аренды" title="Рассчитать стоимость аренды">
+                    <button
+                        class="action-btn"
+                        data-action="Рассчитать стоимость аренды"
+                        data-prompt="Рассчитать стоимость аренды"
+                        title="Рассчитать стоимость аренды"
+                    >
                         Аренда
                     </button>
-                    <button class="action-btn" data-action="Передать администратору" title="Передать администратору">
+                    <button
+                        class="action-btn"
+                        data-action="Передать администратору"
+                        data-prompt="Передать запрос администратору"
+                        title="Передать администратору"
+                    >
                         Администратор
                     </button>
                 </div>
@@ -54,9 +77,11 @@
                         <p>Добро пожаловать! Выберите сценарий и начните тестирование.</p>
                     </div>
                 </div>
-                <div class="chat-input-container">
-                    <input type="text" id="messageInput" placeholder="Введите сообщение..." />
-                    <button id="sendBtn">Отправить</button>
+                <div id="composer" class="composer">
+                    <div class="composer-row">
+                        <input type="text" id="messageInput" placeholder="Введите сообщение..." />
+                        <button id="sendBtn" class="send-icon" aria-label="Отправить" title="Отправить">➤</button>
+                    </div>
                 </div>
             </div>
         </div>

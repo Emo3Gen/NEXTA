@@ -110,11 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
     actionButtons.forEach((btn) => {
         btn.addEventListener('click', async (event) => {
             toast('Нажатие…', 600);
-            const action = btn.dataset.action;
             const btnEl = event.target.closest('button');
+            const textToSend = btnEl?.dataset?.prompt || btnEl?.textContent?.trim() || '';
+            if (!textToSend) return;
             setBtnLoading(btnEl, true);
             try {
-                await sendAction(action);
+                await sendAction(textToSend);
             } finally {
                 setBtnLoading(btnEl, false);
             }
