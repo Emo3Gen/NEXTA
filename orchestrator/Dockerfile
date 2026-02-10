@@ -9,6 +9,9 @@ RUN npm install --production
 # Копируем код приложения
 COPY server.js ./
 
+# Копируем UI (chat-sim) внутрь контейнера
+COPY chat-sim ./chat-sim
+
 # Экспонируем порт 8001
 EXPOSE 8001
 
