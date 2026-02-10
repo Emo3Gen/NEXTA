@@ -34,6 +34,24 @@ app.get('/api/_paths', (req, res) => {
   });
 });
 
+app.get('/api/_ls', (req, res) => {
+  try {
+    const base = '/app';
+    const list = fs.readdirSync(base).map((name) => {
+      const full = path.join(base, name);
+      let type = 'unknown';
+      try {
+        const st = fs.statSync(full);
+        type = st.isDirectory() ? 'dir' : 'file';
+      } catch {}
+      return { name, type };
+    });
+    res.json({ base, list });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 if (chatSimDir) {
   app.use(express.static(chatSimDir));
 }
