@@ -7,10 +7,7 @@ const app = express();
 
 // --- UI discovery: find chat-sim/index.html in typical locations (Render + local)
 const candidates = [
-  path.resolve(process.cwd(), 'chat-sim'),
-  path.resolve(process.cwd(), '../chat-sim'),
-  path.resolve(__dirname, '../chat-sim'),
-  path.resolve(__dirname, '../../chat-sim'),
+  path.resolve(__dirname, 'chat-sim'),
 ];
 
 function pickChatSimDir() {

@@ -378,3 +378,49 @@ header h1 {
     background: #fff;
   }
 }
+/* --- Mobile UX v0.1.3: stable chat + input --- */
+:root {
+  --composer-h: 64px; /* height of input area */
+}
+
+/* Let the page use the dynamic viewport on mobile (prevents jump with keyboard) */
+html, body {
+  height: 100%;
+}
+
+@supports (height: 100dvh) {
+  body { min-height: 100dvh; }
+}
+
+/* Main app layout: messages scroll, composer pinned */
+#app, .app, .container {
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Messages area becomes the only scroll container */
+#messages, .messages, .chat-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--composer-h) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Composer pinned to bottom, above iOS safe area */
+#composer, .composer, .input-bar, .chat-input {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: inherit;
+}
+
+/* Quick actions: cap height so they don't eat the screen */
+#quick-actions, .quick-actions {
+  max-height: 28vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
