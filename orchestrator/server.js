@@ -4,7 +4,7 @@ const path = require('path');
 
 const app = express();
 
-const chatSimDir = path.resolve(process.cwd(), '../chat-sim');
+const chatSimDir = path.resolve(__dirname, '../chat-sim');
 app.use(express.static(chatSimDir));
 
 app.get('/', (req, res) => {
