@@ -266,6 +266,65 @@ header h1 {
     background: #555;
 }
 
+/* === Mobile UX polish v0.1.3 === */
+
+/* Prevent page scroll, allow only messages scroll */
+html, body {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+/* Safe-area support (iOS) */
+:root {
+  --safe-bottom: 0px;
+}
+@supports (padding: env(safe-area-inset-bottom)) {
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* App layout */
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Try common roots without rewriting HTML */
+#app, .app, .container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Messages area scrolls */
+#messages, .messages, .chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(12px + var(--safe-bottom));
+}
+
+/* Input pinned to bottom */
+#composer, .composer, .chat-input {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding-bottom: calc(8px + var(--safe-bottom));
+  background: inherit;
+}
+
+/* Avoid huge input when keyboard opens */
+textarea, input {
+  max-height: 40vh;
+}
+
+
 /* ===== Mobile адаптация ===== */
 @media (max-width: 768px) {
   body {
