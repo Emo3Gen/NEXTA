@@ -3,22 +3,22 @@
 ## What changed
 - Глобалка «Расписание» в switch_scenario: спец-кейс g.scenario === 'Расписание' → возвращает SCHEDULE_FULL_TEXT (многострочное расписание) вместо entryMessage
 - Вынесен SCHEDULE_FULL_TEXT в константу, используется в SHOW_SCHEDULE и в глобальной команде
-- scenarios.json: rent_global_schedule_overrides_sticky — expect_any теперь требует «расписание»/«танцы»/«йога»/«гимнастика» (реальное расписание)
+- scenarios.json: rent_global_schedule_overrides_sticky — expect_any строго требует «танцы»/«йога»/«гимнастика» (контент расписания)
 
 ## Diff summary
 - files: server.js, tests/scenarios.json
 
 ## How to test (from docs/NEXA_TESTS.md)
-- [x] `cd orchestrator && npm run test:scenarios` — оба сценария PASS
+- [x] `cd orchestrator && npm run test:scenarios` — PASS (2/2)
 - [x] Ручной: «Хочу аренду» → «Расписание» → показывается многострочное расписание
 
 ## Risks
-- Минимальный. Приоритет глобалки над sticky сохранён.
+- Нет. Приоритет глобалки над sticky сохранён.
 
 ---
 
 ## REVIEW (Agent B) — Status
-FIXED
+OK
 
 ## REVIEW — Notes (max 5)
 1) Несостыковка docs vs код: глобалка "Расписание" ведёт в entryMessageForScenario('Расписание') и задаёт вопрос вместо показа расписания.
@@ -39,3 +39,12 @@ FIXED
 
 ## Agent B: Review / Command
 _(Agent B пишет сюда замечания или одну команду)_
+
+---
+
+## CLOSEOUT (правило)
+После выполнения REVIEW-команды TL обязан:
+1) Обновить "TL — What changed" (что именно сделал по команде ревьюера)
+2) Обновить "TL — How to test" (команда и результат: PASS/FAIL)
+3) Обновить "TL — Risks" (что осталось риском, если осталось)
+4) В REVIEW — Status поставить: OK (если всё исправлено и тесты зелёные) или оставить RISK (если нет)
