@@ -70,10 +70,23 @@ function matchGlobalAction(text) {
   return null;
 }
 
+const SCHEDULE_FULL_TEXT =
+  'Расписание (сводно):\n' +
+  'Танцы:\n' +
+  '  Пн/Ср  18:00–19:00\n' +
+  '  Вт/Чт  17:00–18:00\n' +
+  '  Сб     11:00–12:00\n\n' +
+  'Йога:\n' +
+  '  Вт/Чт  19:00–20:00\n' +
+  '  Сб     10:00–11:00\n\n' +
+  'Гимнастика:\n' +
+  '  Пн/Ср  17:00–18:00\n' +
+  '  Сб     12:00–13:00';
+
 function entryMessageForScenario(scenario) {
   switch (scenario) {
     case 'Детские группы':
-      return 'Записаться на пробное занятие\n\nДля кого занятие: для ребёнка или для взрослого?';
+      return 'Записаться на пробное занятие\n\nСколько лет ребёнку?';
     case 'Аренда зала':
       return 'По аренде зала уточните:\n1) дата и время\n2) сколько человек\n3) формат (тренировка/мероприятие/съёмка)';
     case 'Расписание':
@@ -117,6 +130,15 @@ const SCHEDULE_BY_INTEREST = {
     'Сб 12:00–13:00'
   ]
 };
+
+const TIME_QUICK_ACTIONS = [
+  'Будни — утро',
+  'Будни — день',
+  'Будни — вечер',
+  'Выходные — утро',
+  'Выходные — день',
+  'Выходные — вечер'
+];
 
 const app = express();
 
@@ -311,6 +333,15 @@ function textHas(t, re) {
   return re.test(normalizeText(t));
 }
 
+function normalizeInterest(text) {
+  const t = normalizeText(text);
+  if (t.includes('тенц')) return 'танцы';
+  if (t.includes('танц')) return 'танцы';
+  if (t.includes('йог')) return 'йога';
+  if (t.includes('гимнаст') || t.includes('растяж')) return 'гимнастика';
+  return t;
+}
+
 function updateSessionFromText(session, text) {
   // answers to "for whom?" (trial / kids)
   if (session.stage === 'ask_for_whom') {
@@ -324,16 +355,24 @@ function updateSessionFromText(session, text) {
     if (textHas(text, /реб|доч|сын|ребен/)) session.slots.yoga_for_whom = 'child';
   }
 
-  // answers to "time?"
+  // answers to "time?" (quick_actions или текст)
   if (session.stage === 'ask_time') {
-    if (textHas(text, /утр/)) session.slots.preferred_time = 'утро';
-    if (textHas(text, /дн/)) session.slots.preferred_time = 'день';
-    if (textHas(text, /веч/)) session.slots.preferred_time = 'вечер';
+    const t = normalizeText(text);
+    const match = TIME_QUICK_ACTIONS.find(opt => normalizeText(opt) === t);
+    if (match) {
+      session.slots.preferred_time = match;
+    } else if (textHas(text, /утр/)) {
+      session.slots.preferred_time = textHas(text, /будн/) ? 'Будни — утро' : textHas(text, /выходн/) ? 'Выходные — утро' : 'утро';
+    } else if (textHas(text, /день|днём/)) {
+      session.slots.preferred_time = textHas(text, /будн/) ? 'Будни — день' : textHas(text, /выходн/) ? 'Выходные — день' : 'день';
+    } else if (textHas(text, /веч/)) {
+      session.slots.preferred_time = textHas(text, /будн/) ? 'Будни — вечер' : textHas(text, /выходн/) ? 'Выходные — вечер' : 'вечер';
+    }
   }
 
-  // kid interest (store as-is)
+  // kid interest (normalize опечатки)
   if (session.stage === 'ask_kid_interest') {
-    session.slots.kid_interest = (text || '').trim();
+    session.slots.kid_interest = normalizeInterest(text);
   }
 }
 
@@ -346,6 +385,9 @@ function buildReply(classified, text, session) {
 
   // === Kids groups flow ===
   if (session.intent === 'KIDS_GROUPS') {
+    if (session.scenario === 'Детские группы' || (session.scenario && session.scenario.includes('детск'))) {
+      session.slots.for_whom = 'child';
+    }
     if (!session.slots.for_whom) {
       session.stage = 'ask_for_whom';
       return 'Для кого занятие: для ребёнка или для взрослого?';
@@ -535,52 +577,35 @@ app.post('/api/message', async (req, res) => {
   session.slots = session.slots || {};
   session.active_intent = session.active_intent || null;
 
-  // === Intent Router: приоритет выше любого шага state machine ===
-  const intentHit = detectIntent(text);
-  if (intentHit?.intent === 'SHOW_SCHEDULE') {
-    session.active_intent = 'SHOW_SCHEDULE';
-    const scheduleText =
-      'Расписание (сводно):\n' +
-      'Танцы:\n' +
-      '  Пн/Ср  18:00–19:00\n' +
-      '  Вт/Чт  17:00–18:00\n' +
-      '  Сб     11:00–12:00\n\n' +
-      'Йога:\n' +
-      '  Вт/Чт  19:00–20:00\n' +
-      '  Сб     10:00–11:00\n\n' +
-      'Гимнастика:\n' +
-      '  Пн/Ср  17:00–18:00\n' +
-      '  Сб     12:00–13:00';
+  // === 1) Глобальные команды — приоритет выше sticky и сценариев ===
+  const g = matchGlobalAction(text);
+  if (g && g.type === 'switch_scenario') {
+    session.active_intent = null;
+    session.scenario = g.scenario;
+    session.stage = 'start';
+    session.step = null;
+    session.slots = {};
+    if (g.scenario === 'Детские группы') session.slots.for_whom = 'child';
+    if (g.scenario.includes('аренд')) session.intent = 'RENT';
+    if (g.scenario.includes('детск')) session.intent = 'KIDS_GROUPS';
 
-    return reply(res, session, scheduleText, { _debug: { intent: 'SHOW_SCHEDULE' } });
-  }
-  if (intentHit?.intent === 'HALL_RENT') {
-    session.active_intent = 'HALL_RENT';
-    session.slots.hall_rent = session.slots.hall_rent || {};
     const msg =
-      'Аренда зала — уточним 3 вещи:\n' +
-      '1) Дата (например: 21.02)\n' +
-      '2) Время и длительность (например: 18:00 на 2 часа)\n' +
-      '3) Сколько человек и формат (тренировка/съёмка/мероприятие/другое)\n\n' +
-      'Напишите одной строкой, например: "21.02 18:00 на 2 часа, 8 человек, тренировка".';
-    return reply(res, session, msg, { _debug: { intent: 'HALL_RENT' } });
+      g.scenario === 'Расписание' ? SCHEDULE_FULL_TEXT : entryMessageForScenario(session.scenario);
+    return reply(res, session, msg, { intent: session.intent || null, slots: session.slots || {} });
   }
-  if (intentHit?.intent === 'ASK_ADMIN') {
-    session.active_intent = 'ASK_ADMIN';
-    const msg = 'Ок. Напишите, что нужно и на когда — я передам администратору.';
-    return reply(res, session, msg, { _debug: { intent: 'ASK_ADMIN' } });
-  }
-  if (intentHit?.intent === 'ASK_TRAINERS') {
-    session.active_intent = 'ASK_TRAINERS';
-    const msg =
-      'По тренерам:\n' +
-      '• "Мягкая" йога — спокойный темп, внимание к технике\n' +
-      '• "Силовая/динамика" — нагрузка выше, больше работы на выносливость\n\n' +
-      'Скажите: вам ближе мягко/динамично? И для кого: для себя или для ребёнка?';
-    return reply(res, session, msg, { _debug: { intent: 'ASK_TRAINERS' } });
+  if (g && g.type === 'reset') {
+    session.active_intent = null;
+    session.scenario = null;
+    session.stage = 'start';
+    session.step = null;
+    session.slots = {};
+    session.intent = null;
+
+    const msg = entryMessageForScenario(null);
+    return reply(res, session, msg, { intent: null, slots: session.slots || {} });
   }
 
-  // === Обработчик продолжения аренды (до state machine) ===
+  // === 2) Sticky-обработчики аренды (до detectIntent) ===
   if (session.active_intent === 'HALL_RENT') {
     const t = normalizeText(text);
 
@@ -614,7 +639,6 @@ app.post('/api/message', async (req, res) => {
     return reply(res, session, msg);
   }
 
-  // === Обработчик follow-up аренды (стоимость, формат — не отдаём в телефон) ===
   if (session.active_intent === 'HALL_RENT_FOLLOWUP') {
     const t = normalizeText(text);
 
@@ -640,36 +664,45 @@ app.post('/api/message', async (req, res) => {
     return reply(res, session, msg);
   }
 
-  // Глобальные команды — сразу возвращаем входной вопрос нового сценария
-  const g = matchGlobalAction(text);
-  if (g && g.type === 'switch_scenario') {
-    session.scenario = g.scenario;
-    session.stage = 'start';
-    session.step = null;
-    session.slots = {};
-    if (g.scenario.includes('аренд')) session.intent = 'RENT';
-    if (g.scenario.includes('детск')) session.intent = 'KIDS_GROUPS';
-
-    const msg = entryMessageForScenario(session.scenario);
-    return reply(res, session, msg, { intent: session.intent || null, slots: session.slots || {} });
+  // === 3) Intent Router: новые запросы (расписание, аренда, админ, тренеры) ===
+  const intentHit = detectIntent(text);
+  if (intentHit?.intent === 'SHOW_SCHEDULE') {
+    session.active_intent = 'SHOW_SCHEDULE';
+    return reply(res, session, SCHEDULE_FULL_TEXT, { _debug: { intent: 'SHOW_SCHEDULE' } });
   }
-  if (g && g.type === 'reset') {
-    session.scenario = null;
-    session.stage = 'start';
-    session.step = null;
-    session.slots = {};
-    session.intent = null;
-
-    const msg = entryMessageForScenario(null);
-    return reply(res, session, msg, { intent: null, slots: session.slots || {} });
+  if (intentHit?.intent === 'HALL_RENT') {
+    session.active_intent = 'HALL_RENT';
+    session.slots.hall_rent = session.slots.hall_rent || {};
+    const msg =
+      'Аренда зала — уточним 3 вещи:\n' +
+      '1) Дата (например: 21.02)\n' +
+      '2) Время и длительность (например: 18:00 на 2 часа)\n' +
+      '3) Сколько человек и формат (тренировка/съёмка/мероприятие/другое)\n\n' +
+      'Напишите одной строкой, например: "21.02 18:00 на 2 часа, 8 человек, тренировка".';
+    return reply(res, session, msg, { _debug: { intent: 'HALL_RENT' } });
+  }
+  if (intentHit?.intent === 'ASK_ADMIN') {
+    session.active_intent = 'ASK_ADMIN';
+    const msg = 'Ок. Напишите, что нужно и на когда — я передам администратору.';
+    return reply(res, session, msg, { _debug: { intent: 'ASK_ADMIN' } });
+  }
+  if (intentHit?.intent === 'ASK_TRAINERS') {
+    session.active_intent = 'ASK_TRAINERS';
+    const msg =
+      'По тренерам:\n' +
+      '• "Мягкая" йога — спокойный темп, внимание к технике\n' +
+      '• "Силовая/динамика" — нагрузка выше, больше работы на выносливость\n\n' +
+      'Скажите: вам ближе мягко/динамично? И для кого: для себя или для ребёнка?';
+    return reply(res, session, msg, { _debug: { intent: 'ASK_TRAINERS' } });
   }
 
-  // If scenario changed — reset session completely
+  // === 4) Scenario change, classify, buildReply ===
   if (scenario && session.scenario !== scenario) {
     session.intent = null;
     session.slots = {};
     session.stage = 'start';
     session.scenario = scenario;
+    if (scenario.includes('детск')) session.slots.for_whom = 'child';
   }
 
   // Lock intent from scenario
@@ -746,8 +779,7 @@ app.post('/api/message', async (req, res) => {
 
   appendLeadEvent({ type: 'INCOMING', ...lead });
 
-  // Backward-compatible response for UI + new contract fields
-  return reply(res, session, replyText, {
+  const extra = {
     intent: classified.intent,
     slots: {
       phone: classified.phone || null,
@@ -759,7 +791,11 @@ app.post('/api/message', async (req, res) => {
       session_id: chatId,
       phone: session.slots?.phone || classified.phone || null,
     },
-  });
+  };
+  if (session.stage === 'ask_time') {
+    extra.quick_actions = TIME_QUICK_ACTIONS.slice();
+  }
+  return reply(res, session, replyText, extra);
 });
 
 // Health check
