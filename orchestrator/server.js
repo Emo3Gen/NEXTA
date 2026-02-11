@@ -6,6 +6,27 @@ const path = require('path');
 // === Simple in-memory dialog state (MVP) ===
 const sessions = new Map();
 
+async function notifyOwner(payload) {
+  const url = process.env.OWNER_WEBHOOK_URL;
+  if (!url) return { skipped: true };
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: resp.ok, status: resp.status };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+function appendJsonl(pathname, obj) {
+  try {
+    fs.appendFileSync(pathname, JSON.stringify(obj) + '\n', 'utf-8');
+  } catch {}
+}
+
 function getSession(chatId = 'default') {
   if (!sessions.has(chatId)) {
     sessions.set(chatId, {
@@ -30,6 +51,17 @@ app.get('/api/_ping', (req, res) => {
 
 app.get('/api/_last_message', (req, res) => {
   res.json(__lastApiMessageBody || { empty: true });
+});
+
+app.get('/api/_leads_tail', (req, res) => {
+  try {
+    const p = '/tmp/nexa_leads.jsonl';
+    const txt = fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : '';
+    const lines = txt.trim().split('\n').filter(Boolean).slice(-20);
+    res.type('application/json').send('[' + lines.join(',') + ']');
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // --- deploy marker
@@ -287,7 +319,7 @@ function appendLeadEvent(event) {
   } catch {}
 }
 
-app.post('/api/message', (req, res) => {
+app.post('/api/message', async (req, res) => {
   __lastApiMessageBody = req.body;
 
   const text = (req.body?.text ?? req.body?.message ?? '').toString();
@@ -343,6 +375,29 @@ app.post('/api/message', (req, res) => {
   }
 
   const reply = buildReply(classified, text, session);
+
+  const leadEvent = {
+    ts: new Date().toISOString(),
+    tenant_id: req.body?.tenant_id || 'studio_nexa',
+    chat_id: chatId,
+    scenario: (req.body?.scenario ?? req.body?.meta?.scenario ?? '').toString(),
+    intent: session.intent || classified.intent || null,
+    stage: session.stage || null,
+    slots: session.slots || {},
+    text,
+  };
+
+  appendJsonl('/tmp/nexa_leads.jsonl', leadEvent);
+
+  // Notify owner only when we are ready (phone collected)
+  if (session.stage === 'ready' && (session.slots?.phone || classified.phone)) {
+    await notifyOwner({
+      type: 'NEW_LEAD',
+      ...leadEvent,
+      phone: session.slots?.phone || classified.phone || null,
+      summary: `Сценарий: ${leadEvent.scenario}. Интерес: ${session.slots?.kid_interest || ''}. Время: ${session.slots?.preferred_time || ''}.`,
+    });
+  }
 
   const lead = {
     ts: nowIso(),
