@@ -292,9 +292,11 @@ app.post('/api/message', (req, res) => {
 
   const text = (req.body?.text ?? req.body?.message ?? '').toString();
   const meta = req.body?.meta || {};
-  const chatId = req.body?.meta?.chat_id || 'default';
+  const scenarioRaw = (req.body?.scenario ?? req.body?.meta?.scenario ?? '').toString();
+  const scenario = scenarioRaw.toLowerCase();
+  const chatId =
+    (req.body?.chat_id || req.body?.meta?.chat_id || req.body?.user_id || 'default').toString();
   const session = getSession(chatId);
-  const scenario = (req.body?.meta?.scenario || '').toString().toLowerCase();
 
   // If scenario changed — reset session completely
   if (scenario && session.scenario !== scenario) {
