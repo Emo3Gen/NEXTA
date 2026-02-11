@@ -1,3 +1,44 @@
+// === GLOBAL ERROR TRAP (so UI never fails silently) ===
+(function () {
+  function writeToDebug(msg) {
+    const panel = document.getElementById('debugPanel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    panel.textContent = String(msg);
+  }
+
+  window.addEventListener('error', (e) => {
+    const msg = [
+      'JS ERROR:',
+      e.message || '(no message)',
+      e.filename ? `at ${e.filename}:${e.lineno}:${e.colno}` : '',
+      e.error && e.error.stack ? `\n${e.error.stack}` : ''
+    ].filter(Boolean).join('\n');
+    writeToDebug(msg);
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    const msg = [
+      'UNHANDLED PROMISE REJECTION:',
+      (r && r.message) ? r.message : String(r),
+      (r && r.stack) ? `\n${r.stack}` : ''
+    ].filter(Boolean).join('\n');
+    writeToDebug(msg);
+  });
+
+  // Also mirror console.error into the overlay
+  const origErr = console.error.bind(console);
+  console.error = (...args) => {
+    origErr(...args);
+    try {
+      writeToDebug('console.error:\n' + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+    } catch {
+      writeToDebug('console.error (non-serializable args)');
+    }
+  };
+})();
+
 // URL orchestrator: в Docker используется localhost:8001 (проброшенный порт), для локальной разработки тоже localhost:8001
 const ORCHESTRATOR_URL =
   location.hostname === 'localhost' || location.hostname === '127.0.0.1'
@@ -159,6 +200,17 @@ async function sendAction(action) {
         action_type: 'button'
     };
 
+    // --- always send scenario + stable chat_id (v0.1.3) ---
+    const scenarioEl = document.getElementById('scenario');
+    const scenarioText =
+      scenarioEl && scenarioEl.selectedIndex >= 0
+        ? (scenarioEl.options[scenarioEl.selectedIndex].text || scenarioEl.value || '')
+        : '';
+
+    payload.meta = payload.meta || {};
+    payload.meta.chat_id = payload.meta.chat_id || 'mobile_test_1';
+    payload.meta.scenario = scenarioText.trim();
+
     toast('Отправляю…');
 
     let resp, data;
@@ -212,6 +264,17 @@ async function sendMessage(text) {
         action_type: 'text'
     };
 
+    // --- always send scenario + stable chat_id (v0.1.3) ---
+    const scenarioEl = document.getElementById('scenario');
+    const scenarioText =
+      scenarioEl && scenarioEl.selectedIndex >= 0
+        ? (scenarioEl.options[scenarioEl.selectedIndex].text || scenarioEl.value || '')
+        : '';
+
+    payload.meta = payload.meta || {};
+    payload.meta.chat_id = payload.meta.chat_id || 'mobile_test_1';
+    payload.meta.scenario = scenarioText.trim();
+
     toast('Отправляю…');
 
     let resp, data;
@@ -251,6 +314,8 @@ function handleResponse(data) {
         updateDebugPanel();
     }
 
+    updateDebug(data);
+
     if (data.response) {
         addBotMessage(data.response);
     } else {
@@ -285,10 +350,8 @@ function addSystemMessage(text) {
     scrollToBottom();
 }
 
-function updateDebugPanel() {
-    document.getElementById('debugScenario').textContent = currentScenario || '—';
-    document.getElementById('debugIntent').textContent = lastIntent || '—';
-    document.getElementById('debugAction').textContent = lastAction || '—';
+function updateDebugPanel(data) {
+  window.safeDebug?.(data ?? { scenario: currentScenario, intent: lastIntent, action: lastAction });
 }
 
 function scrollToBottom() {
@@ -301,3 +364,74 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+function updateDebug(data) {
+  window.safeDebug?.(data);
+}
+
+// === DEBUG TOGGLE (simple) ===
+(function initDebugToggle() {
+  function getPanel() {
+    return (
+      document.getElementById('debugPanel') ||
+      document.getElementById('debug-panel') ||
+      document.querySelector('.debug-panel')
+    );
+  }
+
+  function ensurePanel() {
+    let panel = getPanel();
+    if (panel) return panel;
+
+    // Если в HTML панели нет — создаём минимально сами, чтобы ничего не ломалось
+    panel = document.createElement('pre');
+    panel.id = 'debugPanel';
+    panel.className = 'debug-panel hidden';
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  function togglePanel() {
+    const panel = ensurePanel();
+    panel.classList.toggle('hidden');
+  }
+
+  function mountButton() {
+    // Пытаемся аккуратно вставить кнопку рядом с существующими кнопками/в шапку
+    const host =
+      document.querySelector('.topbar') ||
+      document.querySelector('.toolbar') ||
+      document.querySelector('.controls') ||
+      document.querySelector('header') ||
+      document.body;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'debugToggleBtn';
+    btn.textContent = '🐞 Debug';
+    btn.style.cssText = 'margin-left:8px;';
+
+    btn.addEventListener('click', togglePanel);
+
+    // Если есть контейнер кнопок — вставим туда, иначе в начало body
+    host.appendChild(btn);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountButton);
+  } else {
+    mountButton();
+  }
+
+  // Экспортируем безопасную функцию для записи в панель
+  window.safeDebug = function safeDebug(data) {
+    const panel = getPanel();
+    if (!panel) return; // если пользователь не открывал debug — не тратим ресурсы
+    try {
+      const payload = (data && data._debug) ? data._debug : data;
+      panel.textContent = JSON.stringify(payload, null, 2);
+    } catch (e) {
+      panel.textContent = 'DEBUG stringify error: ' + (e && e.message ? e.message : String(e));
+    }
+  };
+})();

@@ -38,6 +38,26 @@ function getSession(chatId = 'default') {
   return sessions.get(chatId);
 }
 
+const SCHEDULE_BY_INTEREST = {
+  'танцы': [
+    'Пн/Ср 18:00–19:00',
+    'Вт/Чт 17:00–18:00',
+    'Сб 11:00–12:00'
+  ],
+  'йога': [
+    'Вт/Чт 19:00–20:00',
+    'Сб 10:00–11:00'
+  ],
+  'гимнастика': [
+    'Пн/Ср 17:00–18:00',
+    'Сб 12:00–13:00'
+  ],
+  'растяжка': [
+    'Пн/Ср 17:00–18:00',
+    'Сб 12:00–13:00'
+  ]
+};
+
 const app = express();
 
 // v0.1.3 debug routes (DEPLOY PROBE)
@@ -137,12 +157,21 @@ function nowIso() {
 }
 
 function extractPhone(text) {
-  const t = (text || '').replace(/\s+/g, '');
-  const m = t.match(/(\+7|8)\d{10}/);
-  if (!m) return null;
-  // normalize to +7XXXXXXXXXX
-  const raw = m[0];
-  return raw.startsWith('8') ? '+7' + raw.slice(1) : raw;
+  if (!text) return null;
+
+  const digits = text.replace(/\D/g, '');
+
+  // 11 digits starting with 7 or 8
+  if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+    return '+7' + digits.slice(1);
+  }
+
+  // 10 digits (assume Russian local without country code)
+  if (digits.length === 10) {
+    return '+7' + digits;
+  }
+
+  return null;
 }
 
 function extractAge(text) {
@@ -242,7 +271,22 @@ function buildReply(classified, text, session) {
 
     if (!session.slots.preferred_time) {
       session.stage = 'ask_time';
-      return 'И какое время удобнее для занятий: будни/выходные, утро/день/вечер?';
+      const interest = (session.slots?.kid_interest || '').toLowerCase().trim();
+      const key = SCHEDULE_BY_INTEREST[interest]
+        ? interest
+        : Object.keys(SCHEDULE_BY_INTEREST).find(k => interest.includes(k));
+      const lines = key ? SCHEDULE_BY_INTEREST[key] : null;
+
+      let scheduleBlock = '';
+      if (lines && lines.length) {
+        scheduleBlock =
+          `Расписание по направлению «${key}»:\n` +
+          lines.map(x => `• ${x}`).join('\n') +
+          `\n\nКакое время удобнее: будни/выходные, утро/день/вечер?`;
+      } else {
+        scheduleBlock = 'Какое время удобнее: будни/выходные, утро/день/вечер?';
+      }
+      return scheduleBlock;
     }
 
     if (!session.slots.phone) {
@@ -426,6 +470,15 @@ app.post('/api/message', async (req, res) => {
     },
     next_question: reply, // keep simple for now
     lead_status: 'needs_details',
+    _debug: {
+      state: session.stage || null,
+      step: session.stage || null,
+      session_id: chatId,
+      scenario: session.scenario || (req.body?.scenario ?? req.body?.meta?.scenario ?? '').toString(),
+      phone: session.slots?.phone || classified.phone || null,
+      intent: session.intent || classified.intent || null,
+      slots: session.slots || {},
+    },
   });
 });
 
