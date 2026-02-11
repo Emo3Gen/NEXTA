@@ -1,0 +1,12 @@
+# Render Blueprint: один Web Service (API + статика)
+# Dashboard: New → Blueprint → Connect repo
+services:
+  - type: web
+    name: nexa-orchestrator
+    runtime: node
+    rootDir: orchestrator
+
+    buildCommand: npm ci
+    startCommand: node server.js
+
+    healthCheckPath: /health
