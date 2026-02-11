@@ -1,44 +1,3 @@
-// === GLOBAL ERROR TRAP (so UI never fails silently) ===
-(function () {
-  function writeToDebug(msg) {
-    const panel = document.getElementById('debugPanel');
-    if (!panel) return;
-    panel.classList.remove('hidden');
-    panel.textContent = String(msg);
-  }
-
-  window.addEventListener('error', (e) => {
-    const msg = [
-      'JS ERROR:',
-      e.message || '(no message)',
-      e.filename ? `at ${e.filename}:${e.lineno}:${e.colno}` : '',
-      e.error && e.error.stack ? `\n${e.error.stack}` : ''
-    ].filter(Boolean).join('\n');
-    writeToDebug(msg);
-  });
-
-  window.addEventListener('unhandledrejection', (e) => {
-    const r = e.reason;
-    const msg = [
-      'UNHANDLED PROMISE REJECTION:',
-      (r && r.message) ? r.message : String(r),
-      (r && r.stack) ? `\n${r.stack}` : ''
-    ].filter(Boolean).join('\n');
-    writeToDebug(msg);
-  });
-
-  // Also mirror console.error into the overlay
-  const origErr = console.error.bind(console);
-  console.error = (...args) => {
-    origErr(...args);
-    try {
-      writeToDebug('console.error:\n' + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
-    } catch {
-      writeToDebug('console.error (non-serializable args)');
-    }
-  };
-})();
-
 // URL orchestrator: в Docker используется localhost:8001 (проброшенный порт), для локальной разработки тоже localhost:8001
 const ORCHESTRATOR_URL =
   location.hostname === 'localhost' || location.hostname === '127.0.0.1'
@@ -200,17 +159,6 @@ async function sendAction(action) {
         action_type: 'button'
     };
 
-    // --- always send scenario + stable chat_id (v0.1.3) ---
-    const scenarioEl = document.getElementById('scenario');
-    const scenarioText =
-      scenarioEl && scenarioEl.selectedIndex >= 0
-        ? (scenarioEl.options[scenarioEl.selectedIndex].text || scenarioEl.value || '')
-        : '';
-
-    payload.meta = payload.meta || {};
-    payload.meta.chat_id = payload.meta.chat_id || 'mobile_test_1';
-    payload.meta.scenario = scenarioText.trim();
-
     toast('Отправляю…');
 
     let resp, data;
@@ -264,17 +212,6 @@ async function sendMessage(text) {
         action_type: 'text'
     };
 
-    // --- always send scenario + stable chat_id (v0.1.3) ---
-    const scenarioEl = document.getElementById('scenario');
-    const scenarioText =
-      scenarioEl && scenarioEl.selectedIndex >= 0
-        ? (scenarioEl.options[scenarioEl.selectedIndex].text || scenarioEl.value || '')
-        : '';
-
-    payload.meta = payload.meta || {};
-    payload.meta.chat_id = payload.meta.chat_id || 'mobile_test_1';
-    payload.meta.scenario = scenarioText.trim();
-
     toast('Отправляю…');
 
     let resp, data;
@@ -314,7 +251,7 @@ function handleResponse(data) {
         updateDebugPanel();
     }
 
-    updateDebug(data);
+    window.safeDebug?.(data);
 
     if (data.response) {
         addBotMessage(data.response);
@@ -350,8 +287,10 @@ function addSystemMessage(text) {
     scrollToBottom();
 }
 
-function updateDebugPanel(data) {
-  window.safeDebug?.(data ?? { scenario: currentScenario, intent: lastIntent, action: lastAction });
+function updateDebugPanel() {
+    document.getElementById('debugScenario').textContent = currentScenario || '—';
+    document.getElementById('debugIntent').textContent = lastIntent || '—';
+    document.getElementById('debugAction').textContent = lastAction || '—';
 }
 
 function scrollToBottom() {
@@ -365,73 +304,105 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function updateDebug(data) {
-  window.safeDebug?.(data);
-}
-
-// === DEBUG TOGGLE (simple) ===
-(function initDebugToggle() {
-  function getPanel() {
-    return (
-      document.getElementById('debugPanel') ||
-      document.getElementById('debug-panel') ||
-      document.querySelector('.debug-panel')
-    );
+// === DEBUG DROPDOWN (top-right). Enabled only with ?debug=1 ===
+(function initDebugDropdown() {
+  const DEBUG_ENABLED = new URLSearchParams(window.location.search).has('debug');
+  if (!DEBUG_ENABLED) {
+    window.safeDebug = function () {};
+    return;
   }
 
-  function ensurePanel() {
-    let panel = getPanel();
-    if (panel) return panel;
+  function ensureUI() {
+    // Button
+    let btn = document.getElementById('debugToggleBtn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'debugToggleBtn';
+      btn.type = 'button';
+      btn.textContent = '🐞 Debug';
+      document.body.appendChild(btn);
+    }
 
-    // Если в HTML панели нет — создаём минимально сами, чтобы ничего не ломалось
-    panel = document.createElement('pre');
-    panel.id = 'debugPanel';
-    panel.className = 'debug-panel hidden';
-    document.body.appendChild(panel);
-    return panel;
+    // Panel (dropdown)
+    let panel = document.getElementById('debugDropdown');
+    if (!panel) {
+      panel = document.createElement('pre');
+      panel.id = 'debugDropdown';
+      panel.className = 'hidden';
+      panel.textContent = 'Debug enabled. Waiting for data…';
+      document.body.appendChild(panel);
+    }
+
+    // Styles (inline to avoid touching CSS and layout)
+    btn.style.cssText = [
+      'position:fixed',
+      'top:12px',
+      'right:12px',
+      'z-index:10000',
+      'padding:8px 10px',
+      'border-radius:12px',
+      'border:1px solid rgba(0,0,0,0.12)',
+      'background:rgba(255,255,255,0.9)',
+      'backdrop-filter:blur(10px)',
+      '-webkit-backdrop-filter:blur(10px)',
+      'font-size:13px',
+      'cursor:pointer'
+    ].join(';');
+
+    panel.style.cssText = [
+      'position:fixed',
+      'top:52px',
+      'right:12px',
+      'z-index:10000',
+      'width:min(520px, calc(100vw - 24px))',
+      'max-height:60vh',
+      'overflow:auto',
+      'padding:10px 12px',
+      'border-radius:14px',
+      'border:1px solid rgba(0,0,0,0.12)',
+      'background:rgba(255,255,255,0.92)',
+      'backdrop-filter:blur(14px)',
+      '-webkit-backdrop-filter:blur(14px)',
+      'box-shadow:0 12px 40px rgba(0,0,0,0.18)',
+      'font-size:12px',
+      'line-height:1.3',
+      'color:rgba(0,0,0,0.9)',
+      'white-space:pre-wrap'
+    ].join(';');
+
+    // Ensure .hidden works even if CSS doesn't have it
+    function hide() { panel.classList.add('hidden'); panel.style.display = 'none'; }
+    function show() { panel.classList.remove('hidden'); panel.style.display = 'block'; }
+    function toggle() { (panel.style.display === 'block') ? hide() : show(); }
+
+    // Start hidden
+    hide();
+
+    btn.onclick = toggle;
+
+    // Close on outside click / Esc
+    document.addEventListener('click', (e) => {
+      if (e.target === btn || panel.contains(e.target)) return;
+      hide();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hide();
+    });
+
+    return { btn, panel, show, hide };
   }
 
-  function togglePanel() {
-    const panel = ensurePanel();
-    panel.classList.toggle('hidden');
-  }
+  const ui = ensureUI();
 
-  function mountButton() {
-    // Пытаемся аккуратно вставить кнопку рядом с существующими кнопками/в шапку
-    const host =
-      document.querySelector('.topbar') ||
-      document.querySelector('.toolbar') ||
-      document.querySelector('.controls') ||
-      document.querySelector('header') ||
-      document.body;
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'debugToggleBtn';
-    btn.textContent = '🐞 Debug';
-    btn.style.cssText = 'margin-left:8px;';
-
-    btn.addEventListener('click', togglePanel);
-
-    // Если есть контейнер кнопок — вставим туда, иначе в начало body
-    host.appendChild(btn);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mountButton);
-  } else {
-    mountButton();
-  }
-
-  // Экспортируем безопасную функцию для записи в панель
+  // Safe debug writer (never breaks UI)
   window.safeDebug = function safeDebug(data) {
-    const panel = getPanel();
-    if (!panel) return; // если пользователь не открывал debug — не тратим ресурсы
+    if (!ui || !ui.panel) return;
     try {
       const payload = (data && data._debug) ? data._debug : data;
-      panel.textContent = JSON.stringify(payload, null, 2);
+      ui.panel.textContent = JSON.stringify(payload, null, 2);
+      // не раскрываем автоматически — открывается по кнопке
     } catch (e) {
-      panel.textContent = 'DEBUG stringify error: ' + (e && e.message ? e.message : String(e));
+      ui.panel.textContent = 'DEBUG stringify error: ' + (e && e.message ? e.message : String(e));
     }
   };
 })();

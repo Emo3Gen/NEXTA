@@ -27,6 +27,66 @@ function appendJsonl(pathname, obj) {
   } catch {}
 }
 
+function normalizeText(t) {
+  return String(t || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\\\/]+$/g, '')        // убрать завершающие \ or /
+    .replace(/[.,!?]+$/g, '')        // убрать завершающую пунктуацию
+    .replace(/\s+/g, ' ');
+}
+
+function detectIntent(text) {
+  const t = normalizeText(text);
+
+  if (t.includes('распис')) return { intent: 'SHOW_SCHEDULE' };
+  if (t.includes('аренд')) return { intent: 'HALL_RENT' };
+  if (t.includes('админ') || t.includes('администратор') || t.includes('передать запрос администратору')) return { intent: 'ASK_ADMIN' };
+  if (t.includes('тренер') || t.includes('кто вед') || t.includes('какие тренеры')) return { intent: 'ASK_TRAINERS' };
+
+  return null;
+}
+
+function matchGlobalAction(text) {
+  const t = normalizeText(text);
+
+  // смена сценария / быстрые команды
+  if (t.includes('аренд')) return { type: 'switch_scenario', scenario: 'Аренда зала' };
+  if (t.includes('стоимость') && t.includes('аренд')) return { type: 'switch_scenario', scenario: 'Аренда зала' };
+  if (t.includes('рассчит') && t.includes('аренд')) return { type: 'switch_scenario', scenario: 'Аренда зала' };
+  if (t.includes('зал')) return { type: 'switch_scenario', scenario: 'Аренда зала' };
+
+  if (t.includes('распис')) return { type: 'switch_scenario', scenario: 'Расписание' };
+  if (t.includes('посмотреть') && t.includes('распис')) return { type: 'switch_scenario', scenario: 'Расписание' };
+
+  if (t.includes('админ') || t.includes('администратор')) return { type: 'switch_scenario', scenario: 'Администратор' };
+  if (t.includes('возраст')) return { type: 'switch_scenario', scenario: 'Возраст' };
+  if (t.includes('пробн') || t.includes('пробное')) return { type: 'switch_scenario', scenario: 'Детские группы' };
+
+  // навигация
+  if (t === 'назад' || t === 'вернуться') return { type: 'back' };
+  if (t === 'отмена' || t === 'стоп' || t === 'сброс') return { type: 'reset' };
+
+  return null;
+}
+
+function entryMessageForScenario(scenario) {
+  switch (scenario) {
+    case 'Детские группы':
+      return 'Записаться на пробное занятие\n\nДля кого занятие: для ребёнка или для взрослого?';
+    case 'Аренда зала':
+      return 'По аренде зала уточните:\n1) дата и время\n2) сколько человек\n3) формат (тренировка/мероприятие/съёмка)';
+    case 'Расписание':
+      return 'Какое направление интересует: танцы / йога / гимнастика?';
+    case 'Возраст':
+      return 'Сколько лет ребёнку?';
+    case 'Администратор':
+      return 'Опишите вопрос для администратора (что нужно и на когда).';
+    default:
+      return 'Пожалуйста, выберите сценарий.';
+  }
+}
+
 function getSession(chatId = 'default') {
   if (!sessions.has(chatId)) {
     sessions.set(chatId, {
@@ -85,7 +145,28 @@ app.get('/api/_leads_tail', (req, res) => {
 });
 
 // --- deploy marker
-const BUILD = 'v0.1.3';
+const BUILD = 'v0.1.4';
+
+function reply(res, session, text, extra = {}) {
+  const debug = {
+    scenario: session?.scenario ?? null,
+    step: session?.step ?? null,
+    state: session?.stage ?? session?.state ?? null,
+    active_intent: session?.active_intent ?? null,
+    slots: session?.slots || {},
+    last_intent: session?.intent ?? session?.last_intent ?? null,
+    ...extra._debug,
+  };
+  return res.json({
+    ...extra,
+    ok: extra.ok !== false ? true : false,
+    version: extra.version ?? BUILD,
+    text,
+    reply: extra.reply ?? text,
+    response: extra.response ?? text,
+    _debug: debug,
+  });
+}
 
 // --- UI discovery: find chat-sim/index.html in typical locations (Render + local)
 const candidates = [
@@ -227,11 +308,17 @@ function classify(text) {
 }
 
 function textHas(t, re) {
-  return re.test((t || '').toLowerCase());
+  return re.test(normalizeText(t));
 }
 
 function updateSessionFromText(session, text) {
-  // answers to "for whom?"
+  // answers to "for whom?" (trial / kids)
+  if (session.stage === 'ask_for_whom') {
+    if (textHas(text, /реб|доч|сын|ребен|дет/)) session.slots.for_whom = 'child';
+    if (textHas(text, /взросл|для\s+себя|для\s+меня|для\s+себ/)) session.slots.for_whom = 'adult';
+  }
+
+  // answers to "for whom?" (yoga)
   if (session.stage === 'ask_yoga_for_whom') {
     if (textHas(text, /себ|для\s+себя|я\b/)) session.slots.yoga_for_whom = 'self';
     if (textHas(text, /реб|доч|сын|ребен/)) session.slots.yoga_for_whom = 'child';
@@ -259,14 +346,40 @@ function buildReply(classified, text, session) {
 
   // === Kids groups flow ===
   if (session.intent === 'KIDS_GROUPS') {
-    if (!session.slots.age) {
-      session.stage = 'ask_kid_age';
-      return 'Сколько лет ребёнку?';
+    if (!session.slots.for_whom) {
+      session.stage = 'ask_for_whom';
+      return 'Для кого занятие: для ребёнка или для взрослого?';
+    }
+
+    const forWhom = session.slots.for_whom;
+    const age = session.slots.age ?? classified.age;
+
+    if (forWhom === 'child') {
+      if (!age) {
+        session.stage = 'ask_kid_age';
+        return 'Сколько лет ребёнку?';
+      }
+      // Age validation for child
+      if (age < 3) {
+        return 'Сейчас ещё рано — предлагаем консультацию или индивидуальные занятия. Можем обсудить варианты.';
+      }
+      if (age >= 14) {
+        return 'От 14 лет — это уже подростковые/взрослые группы. Уточните, пожалуйста: вам нужен формат для подростка или для взрослого?';
+      }
+    }
+
+    if (forWhom === 'adult') {
+      if (age && age < 14) {
+        session.slots.age = null;
+        session.stage = 'ask_for_whom';
+        return 'Возраст до 14 лет — это детская группа. Для кого занятие: для ребёнка или для взрослого?';
+      }
     }
 
     if (!session.slots.kid_interest) {
       session.stage = 'ask_kid_interest';
-      return 'Что ребёнку ближе: танцы (какие стили), гимнастика/растяжка, или что-то ещё?';
+      const whom = forWhom === 'child' ? 'ребёнку' : 'вам';
+      return `Что ${whom} ближе: танцы (какие стили), гимнастика/растяжка, или что-то ещё?`;
     }
 
     if (!session.slots.preferred_time) {
@@ -290,8 +403,31 @@ function buildReply(classified, text, session) {
     }
 
     if (!session.slots.phone) {
-      session.stage = 'ask_phone';
-      return 'Оставьте, пожалуйста, номер телефона — администратор подтвердит запись.';
+      session.slots = session.slots || {};
+      session.slots.phone_tries = session.slots.phone_tries || 0;
+      const t = normalizeText(text);
+
+      const looksLikeRefusal =
+        t.includes('не остав') || t.includes('не дам') || t.includes('не хочу') || t.includes('зачем') || t.includes('почему');
+
+      if (!extractPhone(text)) {
+        session.slots.phone_tries += 1;
+
+        if (looksLikeRefusal) {
+          return 'Понимаю. Телефон нужен, чтобы администратор подтвердил запись и предложил точное время.\n' +
+            'Можно так:\n' +
+            '1) Написать телефон\n' +
+            '2) Написать «администратор» — и я передам запрос без телефона\n' +
+            '3) Написать «отмена» — сброшу сценарий';
+        }
+
+        if (session.slots.phone_tries >= 2) {
+          return 'Похоже, это не номер. Введите телефон (10–11 цифр) или напишите «администратор», чтобы передать запрос без телефона.';
+        }
+
+        session.stage = 'ask_phone';
+        return 'Оставьте, пожалуйста, номер телефона — администратор подтвердит запись.';
+      }
     }
 
     session.stage = 'ready';
@@ -338,10 +474,33 @@ function buildReply(classified, text, session) {
   if (intent === 'BOOK_TRIAL') {
     session.intent = 'BOOK_TRIAL';
 
-    if (!session.slots.age) {
-      session.stage = 'ask_age';
-      return 'Подскажите возраст ребёнка, пожалуйста.';
+    if (!session.slots.for_whom) {
+      session.stage = 'ask_for_whom';
+      return 'Для кого занятие: для ребёнка или для взрослого?';
     }
+
+    const forWhom = session.slots.for_whom;
+    const age = session.slots.age ?? classified.age;
+
+    if (forWhom === 'child') {
+      if (!age) {
+        session.stage = 'ask_age';
+        return 'Подскажите возраст ребёнка, пожалуйста.';
+      }
+      if (age < 3) {
+        return 'Сейчас ещё рано — предлагаем консультацию или индивидуальные занятия. Можем обсудить варианты.';
+      }
+      if (age >= 14) {
+        return 'От 14 лет — это уже подростковые/взрослые группы. Уточните, пожалуйста: вам нужен формат для подростка или для взрослого?';
+      }
+    }
+
+    if (forWhom === 'adult' && age && age < 14) {
+      session.slots.age = null;
+      session.stage = 'ask_for_whom';
+      return 'Возраст до 14 лет — это детская группа. Для кого занятие: для ребёнка или для взрослого?';
+    }
+
     if (!session.slots.phone) {
       session.stage = 'ask_phone';
       return 'Оставьте номер телефона — администратор подтвердит запись.';
@@ -373,6 +532,137 @@ app.post('/api/message', async (req, res) => {
   const chatId =
     (req.body?.chat_id || req.body?.meta?.chat_id || req.body?.user_id || 'default').toString();
   const session = getSession(chatId);
+  session.slots = session.slots || {};
+  session.active_intent = session.active_intent || null;
+
+  // === Intent Router: приоритет выше любого шага state machine ===
+  const intentHit = detectIntent(text);
+  if (intentHit?.intent === 'SHOW_SCHEDULE') {
+    session.active_intent = 'SHOW_SCHEDULE';
+    const scheduleText =
+      'Расписание (сводно):\n' +
+      'Танцы:\n' +
+      '  Пн/Ср  18:00–19:00\n' +
+      '  Вт/Чт  17:00–18:00\n' +
+      '  Сб     11:00–12:00\n\n' +
+      'Йога:\n' +
+      '  Вт/Чт  19:00–20:00\n' +
+      '  Сб     10:00–11:00\n\n' +
+      'Гимнастика:\n' +
+      '  Пн/Ср  17:00–18:00\n' +
+      '  Сб     12:00–13:00';
+
+    return reply(res, session, scheduleText, { _debug: { intent: 'SHOW_SCHEDULE' } });
+  }
+  if (intentHit?.intent === 'HALL_RENT') {
+    session.active_intent = 'HALL_RENT';
+    session.slots.hall_rent = session.slots.hall_rent || {};
+    const msg =
+      'Аренда зала — уточним 3 вещи:\n' +
+      '1) Дата (например: 21.02)\n' +
+      '2) Время и длительность (например: 18:00 на 2 часа)\n' +
+      '3) Сколько человек и формат (тренировка/съёмка/мероприятие/другое)\n\n' +
+      'Напишите одной строкой, например: "21.02 18:00 на 2 часа, 8 человек, тренировка".';
+    return reply(res, session, msg, { _debug: { intent: 'HALL_RENT' } });
+  }
+  if (intentHit?.intent === 'ASK_ADMIN') {
+    session.active_intent = 'ASK_ADMIN';
+    const msg = 'Ок. Напишите, что нужно и на когда — я передам администратору.';
+    return reply(res, session, msg, { _debug: { intent: 'ASK_ADMIN' } });
+  }
+  if (intentHit?.intent === 'ASK_TRAINERS') {
+    session.active_intent = 'ASK_TRAINERS';
+    const msg =
+      'По тренерам:\n' +
+      '• "Мягкая" йога — спокойный темп, внимание к технике\n' +
+      '• "Силовая/динамика" — нагрузка выше, больше работы на выносливость\n\n' +
+      'Скажите: вам ближе мягко/динамично? И для кого: для себя или для ребёнка?';
+    return reply(res, session, msg, { _debug: { intent: 'ASK_TRAINERS' } });
+  }
+
+  // === Обработчик продолжения аренды (до state machine) ===
+  if (session.active_intent === 'HALL_RENT') {
+    const t = normalizeText(text);
+
+    if (t === 'отмена' || t === 'стоп' || t === 'сброс') {
+      session.active_intent = null;
+      session.slots.hall_rent = null;
+      return reply(res, session, 'Ок, аренду отменил. Что дальше: запись / расписание / администратор?');
+    }
+
+    const hasDate = /\b(\d{1,2}[./]\d{1,2})\b/.test(text);
+    const hasTime = /\b(\d{1,2}[:.]\d{2})\b/.test(text);
+
+    if (hasDate && hasTime) {
+      session.slots.hall_rent = session.slots.hall_rent || {};
+      session.slots.hall_rent.request = text;
+      session.active_intent = 'HALL_RENT_FOLLOWUP';
+
+      const msg =
+        'Принято 👍 Передаю администратору заявку на аренду:\n' +
+        text +
+        '\n\nЕсли хотите — могу уточнить формат (тренировка/съёмка/мероприятие) и контактный телефон.';
+      return reply(res, session, msg);
+    }
+
+    const msg =
+      'Понял. Мне нужно 2 опоры:\n' +
+      '• дата (например 20.02)\n' +
+      '• время (например 19:00)\n' +
+      'И желательно: длительность и сколько человек.\n\n' +
+      'Напишите одной строкой, например: "20.02 19:00 на 3 часа, 6 человек, тренировка".';
+    return reply(res, session, msg);
+  }
+
+  // === Обработчик follow-up аренды (стоимость, формат — не отдаём в телефон) ===
+  if (session.active_intent === 'HALL_RENT_FOLLOWUP') {
+    const t = normalizeText(text);
+
+    if (t.includes('стоим') || t.includes('цена') || t.includes('сколько')) {
+      const msg =
+        'Стоимость зависит от дня недели, времени и формата.\n' +
+        'Я уже передал(а) заявку администратору — он рассчитает точную цену и ответит.\n\n' +
+        'Если хотите, уточните формат: тренировка / съёмка / мероприятие / другое.';
+      return reply(res, session, msg);
+    }
+
+    if (t.includes('тренир') || t.includes('съём') || t.includes('меропр') || t.includes('другое')) {
+      session.slots.hall_rent = session.slots.hall_rent || {};
+      session.slots.hall_rent.format = text;
+      session.active_intent = null;
+      const msg = 'Отлично, добавил(а) формат и передал(а) администратору. Хотите вернуться к записи на занятие или посмотреть расписание?';
+      return reply(res, session, msg);
+    }
+
+    const msg =
+      'Понял. По аренде я передал заявку администратору.\n' +
+      'Если нужно — напишите "стоимость" или уточните формат (тренировка/съёмка/мероприятие).';
+    return reply(res, session, msg);
+  }
+
+  // Глобальные команды — сразу возвращаем входной вопрос нового сценария
+  const g = matchGlobalAction(text);
+  if (g && g.type === 'switch_scenario') {
+    session.scenario = g.scenario;
+    session.stage = 'start';
+    session.step = null;
+    session.slots = {};
+    if (g.scenario.includes('аренд')) session.intent = 'RENT';
+    if (g.scenario.includes('детск')) session.intent = 'KIDS_GROUPS';
+
+    const msg = entryMessageForScenario(session.scenario);
+    return reply(res, session, msg, { intent: session.intent || null, slots: session.slots || {} });
+  }
+  if (g && g.type === 'reset') {
+    session.scenario = null;
+    session.stage = 'start';
+    session.step = null;
+    session.slots = {};
+    session.intent = null;
+
+    const msg = entryMessageForScenario(null);
+    return reply(res, session, msg, { intent: null, slots: session.slots || {} });
+  }
 
   // If scenario changed — reset session completely
   if (scenario && session.scenario !== scenario) {
@@ -418,7 +708,7 @@ app.post('/api/message', async (req, res) => {
     }
   }
 
-  const reply = buildReply(classified, text, session);
+  const replyText = buildReply(classified, text, session);
 
   const leadEvent = {
     ts: new Date().toISOString(),
@@ -457,27 +747,17 @@ app.post('/api/message', async (req, res) => {
   appendLeadEvent({ type: 'INCOMING', ...lead });
 
   // Backward-compatible response for UI + new contract fields
-  res.json({
-    ok: true,
-    version: BUILD,
-    reply,            // new
-    text: reply,      // compatibility
-    response: reply,  // backwards-compat for existing UI
+  return reply(res, session, replyText, {
     intent: classified.intent,
     slots: {
       phone: classified.phone || null,
       age: classified.age || null,
     },
-    next_question: reply, // keep simple for now
+    next_question: replyText,
     lead_status: 'needs_details',
     _debug: {
-      state: session.stage || null,
-      step: session.stage || null,
       session_id: chatId,
-      scenario: session.scenario || (req.body?.scenario ?? req.body?.meta?.scenario ?? '').toString(),
       phone: session.slots?.phone || classified.phone || null,
-      intent: session.intent || classified.intent || null,
-      slots: session.slots || {},
     },
   });
 });
