@@ -3,7 +3,37 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+// === Simple in-memory dialog state (MVP) ===
+const sessions = new Map();
+
+function getSession(chatId = 'default') {
+  if (!sessions.has(chatId)) {
+    sessions.set(chatId, {
+      intent: null,
+      slots: {},
+      stage: 'start',
+    });
+  }
+  return sessions.get(chatId);
+}
+
 const app = express();
+
+// v0.1.3 debug routes (DEPLOY PROBE)
+app.use(express.json({ limit: '1mb' }));
+
+let __lastApiMessageBody = null;
+
+app.get('/api/_ping', (req, res) => {
+  res.json({ ok: true, at: new Date().toISOString() });
+});
+
+app.get('/api/_last_message', (req, res) => {
+  res.json(__lastApiMessageBody || { empty: true });
+});
+
+// --- deploy marker
+const BUILD = 'v0.1.3';
 
 // --- UI discovery: find chat-sim/index.html in typical locations (Render + local)
 const candidates = [
@@ -66,10 +96,8 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8001;
-const PRODUCT_VERSION = 'v0.1.3';
 
 app.use(cors());
-app.use(express.json());
 
 // === v0.1.3: deterministic “smart” router (no LLM yet) ===
 function nowIso() {
@@ -137,38 +165,120 @@ function classify(text) {
   return { intent: 'GENERAL', phone, age };
 }
 
-function buildReply({ intent, phone, age }, text) {
-  // minimal “водим к записи” + 1 открытый вопрос
-  if (intent === 'ASK_YOGA' || intent === 'BOOK_YOGA') {
-    // yoga exists in your catalog
-    const q = age ? `Подскажите, в какое время вам удобнее: утро/день/вечер?` :
-      `Для кого подбираете йогу — для себя? И в какое время удобнее: утро/день/вечер?`;
-    return `Да, у нас есть йога (хатха-йога). ${q}`;
+function textHas(t, re) {
+  return re.test((t || '').toLowerCase());
+}
+
+function updateSessionFromText(session, text) {
+  // answers to "for whom?"
+  if (session.stage === 'ask_yoga_for_whom') {
+    if (textHas(text, /себ|для\s+себя|я\b/)) session.slots.yoga_for_whom = 'self';
+    if (textHas(text, /реб|доч|сын|ребен/)) session.slots.yoga_for_whom = 'child';
   }
 
+  // answers to "time?"
+  if (session.stage === 'ask_time') {
+    if (textHas(text, /утр/)) session.slots.preferred_time = 'утро';
+    if (textHas(text, /дн/)) session.slots.preferred_time = 'день';
+    if (textHas(text, /веч/)) session.slots.preferred_time = 'вечер';
+  }
+
+  // kid interest (store as-is)
+  if (session.stage === 'ask_kid_interest') {
+    session.slots.kid_interest = (text || '').trim();
+  }
+}
+
+function buildReply(classified, text, session) {
+  // Always apply stage-based slot updates first
+  updateSessionFromText(session, text);
+
+  // intent is set only in handler: scenario lock (highest) or classified (if !session.intent)
+  // buildReply does NOT override session.intent
+
+  // === Kids groups flow ===
+  if (session.intent === 'KIDS_GROUPS') {
+    if (!session.slots.age) {
+      session.stage = 'ask_kid_age';
+      return 'Сколько лет ребёнку?';
+    }
+
+    if (!session.slots.kid_interest) {
+      session.stage = 'ask_kid_interest';
+      return 'Что ребёнку ближе: танцы (какие стили), гимнастика/растяжка, или что-то ещё?';
+    }
+
+    if (!session.slots.preferred_time) {
+      session.stage = 'ask_time';
+      return 'И какое время удобнее для занятий: будни/выходные, утро/день/вечер?';
+    }
+
+    if (!session.slots.phone) {
+      session.stage = 'ask_phone';
+      return 'Оставьте, пожалуйста, номер телефона — администратор подтвердит запись.';
+    }
+
+    session.stage = 'ready';
+    return 'Отлично 👍 Передаю заявку администратору для записи в детскую группу.';
+  }
+
+  // === YOGA flow (no more "start" question loops) ===
+  const intent = session.intent || classified.intent;
+
+  const isYoga =
+    intent === 'ASK_YOGA' || intent === 'BOOK_YOGA' ||
+    /йог|хатха|hatha|силов\w*\s*йог/i.test((text || '').toLowerCase());
+
+  if (isYoga) {
+    // ensure intent is locked to yoga
+    if (!session.intent || session.intent === 'GENERAL') session.intent = 'ASK_YOGA';
+
+    if (!session.slots.yoga_for_whom) {
+      session.stage = 'ask_yoga_for_whom';
+      return 'Для кого подбираете йогу — для себя или для ребёнка?';
+    }
+
+    if (!session.slots.preferred_time) {
+      session.stage = 'ask_time';
+      return 'И в какое время удобнее: утро / день / вечер?';
+    }
+
+    if (!session.slots.phone) {
+      session.stage = 'ask_phone';
+      return 'Оставьте, пожалуйста, номер телефона — администратор подтвердит запись.';
+    }
+
+    session.stage = 'ready';
+    return `Отлично 👍 Передаю заявку администратору. Время: ${session.slots.preferred_time}.`;
+  }
+
+  // === Other intents (minimal MVP) ===
   if (intent === 'RENT') {
-    // rental rules exist
-    return `По аренде зала уточните, пожалуйста: на какое мероприятие, сколько человек и какие даты/время рассматриваете? Я предложу 2–3 ближайших варианта.`;
-  }
-
-  if (intent === 'ASK_DANCE_OPTIONS' || intent === 'ASK_OPTIONS') {
-    const ageHint = age ? `Вижу возраст: ${age}. ` : '';
-    return `${ageHint}Супер. Подскажите, для кого подбираете (ребёнок/взрослый) и какой возраст/уровень? Я предложу 2–3 подходящих направления и ближайшие слоты для пробного.`;
+    session.intent = 'RENT';
+    session.stage = 'ask_rent_details';
+    return 'По аренде зала уточните: дата/время, сколько человек и формат мероприятия?';
   }
 
   if (intent === 'BOOK_TRIAL') {
-    const need = [];
-    if (!age) need.push('возраст');
-    if (!phone) need.push('телефон');
-    if (need.length) {
-      return `Запишем на пробное 👍 Подскажите, пожалуйста, ${need.join(' и ')}. И какое время удобнее: утро/день/вечер?`;
+    session.intent = 'BOOK_TRIAL';
+
+    if (!session.slots.age) {
+      session.stage = 'ask_age';
+      return 'Подскажите возраст ребёнка, пожалуйста.';
     }
-    return `Отлично, записываю на пробное. В какое время удобнее: утро/день/вечер?`;
+    if (!session.slots.phone) {
+      session.stage = 'ask_phone';
+      return 'Оставьте номер телефона — администратор подтвердит запись.';
+    }
+    session.stage = 'ready';
+    return 'Отлично 👍 Передаю заявку администратору для записи на пробное.';
   }
 
-  // GENERAL
-  return `Подскажите, что именно вас интересует: танцы для ребёнка/взрослых, йога или аренда зала? Я помогу подобрать вариант и записать.`;
+  // Default first contact
+  session.stage = 'start';
+  return 'Подскажите, что именно вас интересует: танцы для ребёнка/взрослых, йога или аренда зала?';
 }
+
 
 function appendLeadEvent(event) {
   // Simple durable-ish log (for debugging). Render FS may be ephemeral, but useful now.
@@ -178,11 +288,59 @@ function appendLeadEvent(event) {
 }
 
 app.post('/api/message', (req, res) => {
+  __lastApiMessageBody = req.body;
+
   const text = (req.body?.text ?? req.body?.message ?? '').toString();
   const meta = req.body?.meta || {};
+  const chatId = req.body?.meta?.chat_id || 'default';
+  const session = getSession(chatId);
+  const scenario = (req.body?.meta?.scenario || '').toString().toLowerCase();
+
+  // If scenario changed — reset session completely
+  if (scenario && session.scenario !== scenario) {
+    session.intent = null;
+    session.slots = {};
+    session.stage = 'start';
+    session.scenario = scenario;
+  }
+
+  // Lock intent from scenario
+  if (scenario.includes('детск')) {
+    session.intent = 'KIDS_GROUPS';
+  }
+
+  if (scenario.includes('аренд')) {
+    session.intent = 'RENT';
+  }
+
   const classified = classify(text);
 
-  const reply = buildReply(classified, text);
+  // Scenario has absolute priority over free-text classification
+  if (session.intent === 'KIDS_GROUPS') {
+    classified.intent = 'KIDS_GROUPS';
+  }
+
+  if (session.intent === 'RENT') {
+    classified.intent = 'RENT';
+  }
+
+  // update slots if we found something
+  if (classified.age && !session.slots.age) {
+    session.slots.age = classified.age;
+  }
+
+  if (classified.phone && !session.slots.phone) {
+    session.slots.phone = classified.phone;
+  }
+
+  // If intent already locked by scenario — DO NOT override it
+  if (!session.intent) {
+    if (classified.intent && classified.intent !== 'GENERAL') {
+      session.intent = classified.intent;
+    }
+  }
+
+  const reply = buildReply(classified, text, session);
 
   const lead = {
     ts: nowIso(),
@@ -200,7 +358,7 @@ app.post('/api/message', (req, res) => {
   // Backward-compatible response for UI + new contract fields
   res.json({
     ok: true,
-    version: PRODUCT_VERSION,
+    version: BUILD,
     reply,            // new
     text: reply,      // compatibility
     response: reply,  // backwards-compat for existing UI
@@ -216,16 +374,12 @@ app.post('/api/message', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    version: PRODUCT_VERSION,
-    timestamp: new Date().toISOString(),
-  });
+  res.json({ status: 'ok', version: BUILD, timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
   console.log(`🚀 Orchestrator запущен на порту ${PORT}`);
-  console.log(`📦 Версия продукта: ${PRODUCT_VERSION}`);
+  console.log(`📦 Версия продукта: ${BUILD}`);
   console.log(`🌐 Health check: http://localhost:${PORT}/health`);
   console.log(`📨 API endpoint: http://localhost:${PORT}/api/message`);
 });
