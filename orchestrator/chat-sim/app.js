@@ -253,11 +253,37 @@ function handleResponse(data) {
 
     window.safeDebug?.(data);
 
-    if (data.response) {
-        addBotMessage(data.response);
+    const text = data.response || data.text || data.reply;
+    if (text) {
+        addBotMessage(text);
     } else {
         addBotMessage('Получен ответ без текста');
     }
+
+    if (data.quick_actions && Array.isArray(data.quick_actions) && data.quick_actions.length) {
+        addQuickActionsChips(data.quick_actions);
+    }
+}
+
+function addQuickActionsChips(actions) {
+    const container = document.getElementById('chatMessages');
+    const wrap = document.createElement('div');
+    wrap.className = 'quick-actions-chips';
+    actions.forEach((label) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'qa-chip';
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+            wrap.remove();
+            if (currentScenario) {
+                sendMessage(label);
+            }
+        });
+        wrap.appendChild(btn);
+    });
+    container.appendChild(wrap);
+    scrollToBottom();
 }
 
 function addUserMessage(text) {
