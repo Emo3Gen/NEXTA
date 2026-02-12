@@ -36,6 +36,31 @@ function normalizeText(t) {
     .replace(/\s+/g, ' ');
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function replaceRelativeDates(input) {
+  const s = (input || '').toLowerCase();
+  const hasTime = s.match(/\b(\d{1,2}):(\d{2})\b/);
+  const now = new Date();
+
+  let offset = null;
+  if (/(^|\s)сегодня(\s|$)/.test(s)) offset = 0;
+  if (/(^|\s)завтра(\s|$)/.test(s)) offset = 1;
+  if (/(^|\s)послезавтра(\s|$)/.test(s)) offset = 2;
+
+  if (offset === null) return input;
+
+  const d = new Date(now);
+  d.setDate(d.getDate() + offset);
+
+  const ddmm = `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}`;
+
+  // заменяем слово на dd.mm (время остаётся как есть). \b не работает с кириллицей.
+  return input.replace(/(^|\s)(сегодня|завтра|послезавтра)(\s|$)/gi, `$1${ddmm}$3`);
+}
+
 function detectIntent(text) {
   const t = normalizeText(text);
 
@@ -138,6 +163,17 @@ const TIME_QUICK_ACTIONS = [
   'Выходные — утро',
   'Выходные — день',
   'Выходные — вечер'
+];
+
+const AGE_TOO_EARLY_QUICK_ACTIONS = [
+  'Консультация',
+  'Индивидуальные занятия',
+  'Указать другой возраст'
+];
+
+const TEENAGER_OR_ADULT_QUICK_ACTIONS = [
+  'Для подростка',
+  'Для взрослого'
 ];
 
 const app = express();
@@ -395,6 +431,27 @@ function buildReply(classified, text, session) {
 
     const forWhom = session.slots.for_whom;
     const age = session.slots.age ?? classified.age;
+    const t = normalizeText(text);
+
+    // CTA after "рано": Консультация / Индивидуальные / Указать другой возраст
+    if (session.stage === 'ask_kid_age_too_early') {
+      if (t.includes('консультац')) {
+        session.stage = 'ask_phone';
+        session.slots.kid_interest = 'консультация';
+        return 'Ок, передаю запрос на консультацию администратору. Оставьте, пожалуйста, номер телефона — администратор свяжется с вами.';
+      }
+      if (t.includes('индивидуальн')) {
+        session.stage = 'ask_phone';
+        session.slots.kid_interest = 'индивидуальные занятия';
+        return 'Ок, записал интерес к индивидуальным занятиям. Оставьте, пожалуйста, номер телефона — администратор свяжется с вами.';
+      }
+      if (t.includes('другой возраст') || t.includes('указать возраст')) {
+        session.slots.age = null;
+        session.slots.age_early_shown = false;
+        session.stage = 'ask_kid_age';
+        return 'Сколько лет ребёнку?';
+      }
+    }
 
     if (forWhom === 'child') {
       if (!age) {
@@ -403,11 +460,21 @@ function buildReply(classified, text, session) {
       }
       // Age validation for child
       if (age < 3) {
+        if (session.slots.age_early_shown) {
+          // уже говорили "рано" — не повторять, уточнить с CTA
+          session.stage = 'ask_kid_age_too_early';
+          return 'Мы берём в группы с 3 лет. Хотите консультацию или индивидуальные занятия?';
+        }
+        session.slots.age_early_shown = true;
+        session.stage = 'ask_kid_age_too_early';
         return 'Сейчас ещё рано — предлагаем консультацию или индивидуальные занятия. Можем обсудить варианты.';
       }
       if (age >= 14) {
+        session.stage = 'ask_teenager_or_adult';
         return 'От 14 лет — это уже подростковые/взрослые группы. Уточните, пожалуйста: вам нужен формат для подростка или для взрослого?';
       }
+      // age OK — сбросить флаг, если был
+      session.slots.age_early_shown = false;
     }
 
     if (forWhom === 'adult') {
@@ -577,6 +644,12 @@ app.post('/api/message', async (req, res) => {
   session.slots = session.slots || {};
   session.active_intent = session.active_intent || null;
 
+  const TEST_MODE = process.env.TEST_MODE === '1';
+  if (TEST_MODE) {
+    // В тестовом режиме не обращаемся к LLM
+    // Используем только локальную логику сценариев (intent/state flow)
+  }
+
   // === 1) Глобальные команды — приоритет выше sticky и сценариев ===
   const g = matchGlobalAction(text);
   if (g && g.type === 'switch_scenario') {
@@ -586,7 +659,11 @@ app.post('/api/message', async (req, res) => {
     session.step = null;
     session.slots = {};
     if (g.scenario === 'Детские группы') session.slots.for_whom = 'child';
-    if (g.scenario.includes('аренд')) session.intent = 'RENT';
+    if (g.scenario.includes('аренд')) {
+      session.intent = 'RENT';
+      session.active_intent = 'HALL_RENT';
+      session.slots.hall_rent = session.slots.hall_rent || {};
+    }
     if (g.scenario.includes('детск')) session.intent = 'KIDS_GROUPS';
 
     const msg =
@@ -605,6 +682,21 @@ app.post('/api/message', async (req, res) => {
     return reply(res, session, msg, { intent: null, slots: session.slots || {} });
   }
 
+  // === 1.5) Scenario from payload: установить active_intent до sticky (важно для аренды) ===
+  if (scenario && session.scenario !== scenario) {
+    session.intent = null;
+    session.slots = {};
+    session.stage = 'start';
+    session.step = null;
+    session.scenario = scenario;
+    if (scenario.includes('детск')) session.slots.for_whom = 'child';
+    if (scenario.includes('аренд')) {
+      session.intent = 'RENT';
+      session.active_intent = 'HALL_RENT';
+      session.slots.hall_rent = session.slots.hall_rent || {};
+    }
+  }
+
   // === 2) Sticky-обработчики аренды (до detectIntent) ===
   if (session.active_intent === 'HALL_RENT') {
     const t = normalizeText(text);
@@ -615,17 +707,18 @@ app.post('/api/message', async (req, res) => {
       return reply(res, session, 'Ок, аренду отменил. Что дальше: запись / расписание / администратор?');
     }
 
-    const hasDate = /\b(\d{1,2}[./]\d{1,2})\b/.test(text);
-    const hasTime = /\b(\d{1,2}[:.]\d{2})\b/.test(text);
+    const textForRent = replaceRelativeDates(text);
+    const hasDate = /\b(\d{1,2}[./]\d{1,2})\b/.test(textForRent);
+    const hasTime = /\b(\d{1,2}[:.]\d{2})\b/.test(textForRent);
 
     if (hasDate && hasTime) {
       session.slots.hall_rent = session.slots.hall_rent || {};
-      session.slots.hall_rent.request = text;
+      session.slots.hall_rent.request = textForRent;
       session.active_intent = 'HALL_RENT_FOLLOWUP';
 
       const msg =
         'Принято 👍 Передаю администратору заявку на аренду:\n' +
-        text +
+        textForRent +
         '\n\nЕсли хотите — могу уточнить формат (тренировка/съёмка/мероприятие) и контактный телефон.';
       return reply(res, session, msg);
     }
@@ -696,7 +789,7 @@ app.post('/api/message', async (req, res) => {
     return reply(res, session, msg, { _debug: { intent: 'ASK_TRAINERS' } });
   }
 
-  // === 4) Scenario change, classify, buildReply ===
+  // === 4) Scenario change (если не сработало в 1.5), classify, buildReply ===
   if (scenario && session.scenario !== scenario) {
     session.intent = null;
     session.slots = {};
@@ -712,6 +805,8 @@ app.post('/api/message', async (req, res) => {
 
   if (scenario.includes('аренд')) {
     session.intent = 'RENT';
+    session.active_intent = 'HALL_RENT';
+    session.slots.hall_rent = session.slots.hall_rent || {};
   }
 
   const classified = classify(text);
@@ -726,8 +821,11 @@ app.post('/api/message', async (req, res) => {
   }
 
   // update slots if we found something
-  if (classified.age && !session.slots.age) {
-    session.slots.age = classified.age;
+  if (classified.age) {
+    // allow age correction after "рано" (user may type 15/22)
+    if (!session.slots.age || session.stage === 'ask_kid_age_too_early') {
+      session.slots.age = classified.age;
+    }
   }
 
   if (classified.phone && !session.slots.phone) {
@@ -741,7 +839,25 @@ app.post('/api/message', async (req, res) => {
     }
   }
 
-  const replyText = buildReply(classified, text, session);
+  // === LLM integration point: при добавлении callLLM / openai.chat.completions.create / provider.generate ===
+  // вставьте guard прямо перед вызовом:
+  //   const TEST_MODE = process.env.TEST_MODE === '1';
+  //   if (TEST_MODE) {
+  //     return res.json({ text: "TEST_MODE: unexpected LLM call (bug).", debug: { where: "llm_call_guard" } });
+  //   }
+  const useLLM = false; // true когда LLM интегрирован
+  let replyText;
+  if (useLLM) {
+    const TEST_MODE = process.env.TEST_MODE === '1';
+    if (TEST_MODE) {
+      return res.json({
+        text: "TEST_MODE: unexpected LLM call (bug).",
+        debug: { where: "llm_call_guard" }
+      });
+    }
+    // replyText = await callLLM(...);
+  }
+  if (!replyText) replyText = buildReply(classified, text, session);
 
   const leadEvent = {
     ts: new Date().toISOString(),
@@ -794,6 +910,12 @@ app.post('/api/message', async (req, res) => {
   };
   if (session.stage === 'ask_time') {
     extra.quick_actions = TIME_QUICK_ACTIONS.slice();
+  }
+  if (session.stage === 'ask_kid_age_too_early') {
+    extra.quick_actions = AGE_TOO_EARLY_QUICK_ACTIONS.slice();
+  }
+  if (session.stage === 'ask_teenager_or_adult') {
+    extra.quick_actions = TEENAGER_OR_ADULT_QUICK_ACTIONS.slice();
   }
   return reply(res, session, replyText, extra);
 });

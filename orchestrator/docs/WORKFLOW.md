@@ -29,9 +29,26 @@
 
 ### Каноническая команда прогона тестов
 ```bash
-cd orchestrator && npm run test:scenarios
+cd orchestrator
+# Терминал 1: сервер в тестовом режиме (без LLM)
+npm run start:test
+
+# Терминал 2: прогон CORE + LLM-QA
+npm run test:scenarios
+OPENAI_API_KEY=sk-... npm run test:llmqa
 ```
-Endpoint: `/api/message` (server.js). Не менять без согласования.
+Или одной командой (если сервер уже запущен на 8001):
+```bash
+npm run test:scenarios
+OPENAI_API_KEY=sk-... npm run test:llmqa
+```
+Endpoint: `/api/message` (server.js). TEST_MODE=1 — только детерминированная логика, без LLM.
+
+**LLM-QA:** читает orchestrator/tests/llmqa_report.json; при verdict=PROBLEM — REVIEW Status = RISK; FIX TASK берётся из fix_task.summary + fix_task.acceptance_criteria.
+
+Правило:
+- На машинах без ключа `OPENAI_API_KEY` LLM-QA может быть **SKIPPED** (exit 0) и всё равно пишет `orchestrator/tests/llmqa_report.json` со статусом skipped.
+- Для релиза OWNER обязан прогнать LLM-QA **с ключом** и получить verdict=OK.
 
 ---
 

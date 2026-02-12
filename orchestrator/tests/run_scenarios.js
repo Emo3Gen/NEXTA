@@ -26,12 +26,12 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function buildPayload(text, scenario) {
+function buildPayload(text, scenario, chatId = CHAT_ID) {
   // Common shape used in many NEXA/Shiftledger-like servers
   // Adjust here if your server expects a different contract.
   const payload = {
     source: SOURCE,
-    chat_id: CHAT_ID,
+    chat_id: chatId,
     user_id: USER_ID,
     text,
     meta: { role: "user" },
@@ -100,6 +100,14 @@ function assertIncludesAny(haystack, needles, ctx) {
   }
 }
 
+function assertNotIncludesAny(haystack, needles, ctx) {
+  const h = normalizeText(haystack);
+  const found = needles.find((n) => h.includes(normalizeText(n)));
+  if (found) {
+    throw new Error(`ASSERT FAIL: expected NONE of ${JSON.stringify(needles)} in bot text.\nContext: ${ctx}\nBot: ${haystack}\nFound: ${found}`);
+  }
+}
+
 async function runScenario(scn) {
   console.log(`\n=== Scenario: ${scn.name} ===`);
   let lastBot = { text: "", quick_actions: [] };
@@ -109,7 +117,7 @@ async function runScenario(scn) {
 
     if (step.in != null) {
       const url = `${BASE_URL}${CHAT_ENDPOINT}`;
-      const payload = buildPayload(step.in, scn.scenario);
+      const payload = buildPayload(step.in, scn.scenario, `${CHAT_ID}_${scn.name}`);
 
       const resp = await postJson(url, payload);
       if (resp.status >= 400) {
@@ -136,6 +144,11 @@ async function runScenario(scn) {
         );
       }
       console.log(`quick_actions OK: ${qa.length} item(s)`);
+    }
+
+    if (step.expect_not_any) {
+      assertNotIncludesAny(lastBot.text, step.expect_not_any, `${scn.name} step ${i + 1}`);
+      console.log(`expect_not_any OK: none of ${JSON.stringify(step.expect_not_any)}`);
     }
   }
 

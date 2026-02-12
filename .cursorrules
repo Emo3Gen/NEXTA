@@ -38,6 +38,44 @@
 
 ## Обязательное правило для NEXA_REVIEW_QA
 
+### Запуск при каждом ревью (обязательно)
+
+1. **CORE:** `cd orchestrator && npm run test:scenarios`
+2. **LLM-QA:** `cd orchestrator && OPENAI_API_KEY=... npm run test:llmqa`
+
+### Определение статуса
+
+- **REVIEW Status = RISK**, если:
+  - CORE red (хотя бы один сценарий failed), ИЛИ
+  - LLM-QA нашёл `verdict=PROBLEM` хотя бы в одном кейсе (см. orchestrator/tests/llmqa_report.json)
+- **REVIEW Status = OK**, если все CORE зелёные и все LLM-QA кейсы `verdict=OK`.
+
+### Если LLM-QA вернул PROBLEM
+
+1. Открыть `orchestrator/tests/llmqa_report.json`
+2. Найти кейсы с `verdict: "PROBLEM"`
+3. Сформировать FIX TASK для Agent A, используя:
+   - `fix_task.summary` — краткое описание задачи
+   - `fix_task.acceptance_criteria` — конкретные критерии приёмки
+   - указать, какой кейс(ы) упал(и): `name` из report
+
+### Формат ответа
+
+- что ок / что риск
+- до 5 замечаний
+- один FIX TASK (если нужен) — **подробный**: файл, логика, ожидаемое поведение
+- как проверить (2–4 шага)
+
+### Обязательная строка в конце
+
+- **Если нужны правки:**
+  COPY→A: Execute the FIX TASK from this review. Update docs/HANDOFF.md, rerun npm run test:scenarios + test:llmqa, then reply with COPY→B line.
+
+- **Если всё ок:**
+  COPY→OWNER: You can release now (merge dev→main, push main). Smoke test: kids time chips + rent→schedule.
+
+---
+
 Каждое ревью должно включать:
 
 1) Проверку регрессий независимо от diff:
@@ -72,3 +110,36 @@
   BASE_URL=http://localhost:8001 npm run test:scenarios
 - Если тесты не прогнаны — это должно быть явно указано как ⚠️ RISK.
 - Пушить можно только в dev/feat ветки (main трогает только владелец при релизе).
+
+## Mandatory end-of-run handoff line (copy/paste)
+Every agent response MUST end with exactly one NEXT line.
+
+For NEXA_TL_PM:
+- If tests are green and HANDOFF updated:
+  NEXT: @NEXA_REVIEW_QA — Review docs/HANDOFF.md + docs/* and give ONE command.
+- If tests are red:
+  NEXT: @NEXA_TL_PM — Fix failing tests shown above, update HANDOFF, rerun npm run test:scenarios.
+
+For NEXA_REVIEW_QA:
+- If Status = OK:
+  NEXT: OWNER — If you want to release: merge dev→main and push main; then smoke test (kids time chips, rent→schedule).
+- If Status = RISK:
+  NEXT: @NEXA_TL_PM — Execute the ONE command from REVIEW, update HANDOFF (CLOSEOUT), rerun tests.
+
+## Admin-free handoff (no file opening by owner)
+
+Agents MUST still use docs/HANDOFF.md + run tests, BUT must output a single copyable line at the end.
+
+NEXA_TL_PM must end with exactly one line:
+COPY→B: Review latest changes via docs/HANDOFF.md + run npm run test:scenarios + test:llmqa; if any failure or risk, write a detailed FIX TASK for TL. Status expected: [OK/RISK]
+
+NEXA_REVIEW_QA must ALWAYS:
+1) run npm run test:scenarios
+2) ensure the suite covers critical paths (kids age 2, kids age 6, rent happy path, rent+schedule override, global commands, normalization). If missing, add scenarios and rerun.
+3) produce a detailed FIX TASK (file/logic/expected behavior) if needed.
+
+NEXA_REVIEW_QA must end with exactly one line:
+- If fixes needed:
+  COPY→A: Execute the FIX TASK from this review. Update docs/HANDOFF.md, rerun npm run test:scenarios + test:llmqa, then reply with COPY→B line.
+- If OK to release:
+  COPY→OWNER: You can release now (merge dev→main, push main). Smoke test: kids time chips + rent→schedule.
